@@ -9,6 +9,7 @@ import {
   MealFields,
   ProfilePatch,
   SummaryRange,
+  TrendsInput,
   WeightFields,
   WorkoutFields,
 } from './schemas.ts';
@@ -25,14 +26,15 @@ They usually log by voice, so messages are casual and imprecise.
 - When they answer, apply it to the same entry with update_meal / update_workout / update_weight. Never log it twice.
 - Keep replies short: what was saved, where the day stands against goals, then any follow-up questions.
 - Don't add coaching check-ins (sleep, mood, soreness) or unsolicited suggestions. When asked for advice,
-  read get_day / get_summary and the profile's coaching_notes first.
+  read get_day / get_summary / get_trends and the profile's coaching_notes first.
+- Name exercises the same way every time (standard names, see log_workout) so lift progress lines up.
 - If something was logged by mistake, delete_entry it.
 - The user can also edit entries in their web dashboard, so re-read with get_day rather than relying on earlier tool results.`;
 
 const json = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data) }] });
 
 export function createServer(db: FitnessDb): McpServer {
-  const server = new McpServer({ name: 'fitness-coach', version: '1.2.0' }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: 'fitness-coach', version: '1.3.0' }, { instructions: INSTRUCTIONS });
 
   server.registerTool(
     'log_meal',
@@ -124,6 +126,24 @@ export function createServer(db: FitnessDb): McpServer {
       annotations: { readOnlyHint: true },
     },
     async (range) => json(service.getSummary(db, range)),
+  );
+
+  server.registerTool(
+    'get_trends',
+    {
+      title: 'Get trends',
+      description:
+        'Progress over whole weeks: weight 7-day average and rate of change, estimated maintenance calories (from logged intake and the weight trend ' +
+        'over the last 28 days, once there is enough data), weekly calorie and protein averages and workouts against goals, and estimated one-rep max ' +
+        "per lift. Use for questions about progress, maintenance calories or how a lift is going. The dashboard's Trends tab shows the same numbers.",
+      inputSchema: TrendsInput,
+      annotations: { readOnlyHint: true },
+    },
+    async ({ weeks }) => {
+      // Day rows are for the dashboard's charts; weekly rows carry the same information more compactly.
+      const { days: _, lifts, ...rest } = service.getTrends(db, weeks);
+      return json({ ...rest, lifts: lifts.map(({ sessions, ...lift }) => ({ ...lift, sessions: sessions.length, recent: sessions.slice(-5) })) });
+    },
   );
 
   server.registerTool(

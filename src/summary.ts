@@ -2,14 +2,14 @@ import type { FitnessDb } from './db.ts';
 import type { Entries, MealRow, Profile, WeightUnit } from './types.ts';
 import { addDays, daysBetween, nowLocal, weekday } from './time.ts';
 
-const round1 = (n: number) => Math.round(n * 10) / 10;
+export const round1 = (n: number) => Math.round(n * 10) / 10;
 
-function convertWeight(weight: number, from: WeightUnit, to: WeightUnit): number {
+export function convertWeight(weight: number, from: WeightUnit, to: WeightUnit): number {
   if (from === to) return weight;
   return round1(from === 'kg' ? weight * 2.20462 : weight / 2.20462);
 }
 
-function mealTotals(meals: MealRow[]) {
+export function mealTotals(meals: MealRow[]) {
   const sum = (key: 'calories' | 'protein_g' | 'carbs_g' | 'fat_g') => round1(meals.reduce((t, m) => t + m[key], 0));
   return { calories: Math.round(sum('calories')), protein_g: sum('protein_g'), carbs_g: sum('carbs_g'), fat_g: sum('fat_g') };
 }

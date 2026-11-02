@@ -7,7 +7,7 @@
     "start": "node --disable-warning=ExperimentalWarning src/index.ts",
     "stdio": "node --disable-warning=ExperimentalWarning src/stdio.ts",
     "typecheck": "tsc && tsc -p web",
-    "test": "node --disable-warning=ExperimentalWarning test/smoke.ts",
+    "test": "node --disable-warning=ExperimentalWarning test/trends.ts && node --disable-warning=ExperimentalWarning test/smoke.ts",
     "web": "vite web",
     "build": "vite build web",
     "icons": "node scripts/make-icons.ts"

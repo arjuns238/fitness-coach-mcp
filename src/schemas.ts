@@ -2,6 +2,7 @@
 import * as z from 'zod/v4';
 
 export const MAX_RANGE_DAYS = 92;
+export const MAX_TREND_WEEKS = 52;
 
 export const DateInput = z
   .string()
@@ -52,7 +53,14 @@ export const WorkoutFields = z.object({
   exercises: z
     .array(
       z.object({
-        name: z.string().min(1),
+        name: z
+          .string()
+          .min(1)
+          .describe(
+            'Standard name in Title Case, the same every time so progress lines up: "Bench Press" (not "bench" or "flat bench"), ' +
+              '"Squat", "Deadlift", "Overhead Press", "Romanian Deadlift", "Pull-up". Name the equipment only when it isn\'t a barbell: ' +
+              '"Dumbbell Bench Press", "Cable Row".',
+          ),
         sets: z
           .array(
             z.object({
@@ -87,6 +95,16 @@ export const SummaryRange = z.object({
   start_date: DateInput,
   end_date: DateInput,
   days: z.number().int().min(1).max(MAX_RANGE_DAYS).optional().describe('Range length ending at end_date, if start_date is not given'),
+});
+
+export const TrendsInput = z.object({
+  weeks: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_TREND_WEEKS)
+    .optional()
+    .describe('Whole weeks (Sunday to Saturday) ending with the current one. Defaults to 12.'),
 });
 
 const goal = z.number().positive().nullable().optional();

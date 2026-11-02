@@ -3,13 +3,18 @@ import { api, AuthError } from './api.ts';
 import { DayView } from './DayView.tsx';
 import { GoalsView } from './GoalsView.tsx';
 import { HistoryView } from './HistoryView.tsx';
+import { TREND_RANGES, TrendsView } from './TrendsView.tsx';
 import { AppContext, type AppContextValue } from './ui.tsx';
 
-type Route = { tab: 'day'; date?: string } | { tab: 'history'; month?: string } | { tab: 'goals' };
+type Route = { tab: 'day'; date?: string } | { tab: 'history'; month?: string } | { tab: 'trends'; weeks: number } | { tab: 'goals' };
 
 function parseRoute(hash: string): Route {
   const [, tab, param] = hash.replace(/^#/, '').split('/');
   if (tab === 'history') return { tab, month: /^\d{4}-\d{2}$/.test(param ?? '') ? param : undefined };
+  if (tab === 'trends') {
+    const weeks = Number(param);
+    return { tab, weeks: TREND_RANGES.some((r) => r.weeks === weeks) ? weeks : 12 };
+  }
   if (tab === 'goals') return { tab };
   return { tab: 'day', date: /^\d{4}-\d{2}-\d{2}$/.test(param ?? '') ? param : undefined };
 }
@@ -69,6 +74,7 @@ export function App() {
       <main className="app">
         {route.tab === 'day' && <DayView key={route.date ?? 'today'} date={route.date} />}
         {route.tab === 'history' && <HistoryView month={route.month} />}
+        {route.tab === 'trends' && <TrendsView weeks={route.weeks} />}
         {route.tab === 'goals' && <GoalsView />}
       </main>
       <TabBar current={route.tab} />
@@ -94,6 +100,12 @@ function TabBar({ current }: { current: Route['tab'] }) {
           <path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </>
       ),
+    },
+    {
+      tab: 'trends',
+      href: '#/trends',
+      label: 'Trends',
+      icon: <path d="M4 18l5-6 4 3 7-9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />,
     },
     {
       tab: 'goals',

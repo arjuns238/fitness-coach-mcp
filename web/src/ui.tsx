@@ -152,15 +152,19 @@ export function NumberField({
 export function useAsync<T>(load: () => Promise<T>, deps: unknown[]) {
   const { report } = useApp();
   const [data, setData] = useState<T>();
+  const [loading, setLoading] = useState(true);
   const [version, setVersion] = useState(0);
   useEffect(() => {
     let current = true;
+    setLoading(true);
     load()
       .then((result) => current && setData(result))
-      .catch(report);
+      .catch(report)
+      .finally(() => current && setLoading(false));
     return () => {
       current = false;
     };
   }, [...deps, version]);
-  return { data, reload: () => setVersion((v) => v + 1) };
+  // While reloading, `data` keeps the previous result so views can hold their frame instead of flashing.
+  return { data, loading, reload: () => setVersion((v) => v + 1) };
 }

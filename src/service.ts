@@ -3,6 +3,7 @@ import type { FitnessDb } from './db.ts';
 import { InputError, NotFoundError } from './errors.ts';
 import {
   MAX_RANGE_DAYS,
+  MAX_TREND_WEEKS,
   type MealInput,
   type ProfilePatchInput,
   type SummaryRangeInput,
@@ -11,6 +12,7 @@ import {
 } from './schemas.ts';
 import { dayDetail, dayTotals, rangeSummary } from './summary.ts';
 import { addDays, daysBetween, isValidTimeZone, nowLocal, resolveDate } from './time.ts';
+import { trends } from './trends.ts';
 import type { EntryKind, Exercise, Profile } from './types.ts';
 
 const MEAL_TIMES: Record<string, string> = { breakfast: '08:00', lunch: '12:30', dinner: '19:00', snack: '15:00' };
@@ -118,6 +120,13 @@ export function getMonth(db: FitnessDb, month: string) {
   const [year, m] = [Number(match[1]), Number(match[2])];
   const next = m === 12 ? `${year + 1}-01-01` : `${year}-${String(m + 1).padStart(2, '0')}-01`;
   return rangeSummary(db, `${month}-01`, addDays(next, -1), db.getProfile());
+}
+
+export function getTrends(db: FitnessDb, weeks = 12) {
+  if (!Number.isInteger(weeks) || weeks < 1 || weeks > MAX_TREND_WEEKS) {
+    throw new InputError(`weeks must be a whole number from 1 to ${MAX_TREND_WEEKS}.`);
+  }
+  return trends(db, weeks, db.getProfile());
 }
 
 export function updateProfile(db: FitnessDb, patch: ProfilePatchInput) {

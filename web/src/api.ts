@@ -1,6 +1,6 @@
-import type { Exercise, FoodItem, MealRow, Profile, WeighInRow, WorkoutRow } from '../../src/types.ts';
+import type { Exercise, FoodItem, MealRow, Profile, Trends, WeighInRow, WorkoutRow } from '../../src/types.ts';
 
-export type { Exercise, ExerciseSet, FoodItem, Profile, WeightUnit } from '../../src/types.ts';
+export type { Exercise, ExerciseSet, FoodItem, Lift, Profile, Trends, WeightUnit } from '../../src/types.ts';
 
 export interface Totals {
   calories: number;
@@ -85,6 +85,7 @@ export const api = {
   logout: () => request<{ authenticated: boolean }>('POST', '/logout', {}),
   day: (date?: string) => request<DayDetail>('GET', `/day${date ? `?date=${date}` : ''}`),
   month: (month: string) => request<MonthSummary>('GET', `/month?month=${month}`),
+  trends: (weeks: number) => request<Trends>('GET', `/trends?weeks=${weeks}`),
   profile: () => request<Profile>('GET', '/profile'),
   updateProfile: (patch: Record<string, unknown>) => request<Profile>('PATCH', '/profile', patch),
   recentMeals: () => request<MealRow[]>('GET', '/recent-meals'),

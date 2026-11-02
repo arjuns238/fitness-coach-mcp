@@ -127,6 +127,7 @@ try {
       'delete_entry',
       'get_day',
       'get_summary',
+      'get_trends',
       'log_meal',
       'log_weight',
       'log_workout',
@@ -391,6 +392,19 @@ try {
     assert.equal(recent.data[0].description, 'greek yogurt bowl');
     assert.equal((await api('DELETE', `/meals/${mealId}`)).status, 200);
   });
+  await check('trends: whole weeks for the charts, and get_trends without the day rows', async () => {
+    const { status, data } = await api('GET', '/trends?weeks=4');
+    assert.equal(status, 200);
+    assert.equal(data.weeks.length, 4);
+    assert.equal(data.days.at(-1).date, today);
+    assert.deepEqual(data.maintenance.requirements, { logged_days: 14, weigh_ins: 4, weigh_in_span_days: 14 });
+    assert.equal((await api('GET', '/trends?weeks=0')).status, 400);
+    assert.equal((await api('GET', '/trends?weeks=abc')).status, 400);
+    const viaMcp = await callLegacy('get_trends', { weeks: 4 });
+    assert.equal(viaMcp.isError, false);
+    assert.equal(viaMcp.data.days, undefined);
+    assert.equal(viaMcp.data.weeks.length, 4);
+  });
   await check('logout clears the cookie', async () => {
     const { headers } = await api('POST', '/logout', {});
     assert.match(headers.get('set-cookie')!, /Max-Age=0/);
@@ -429,7 +443,7 @@ try {
     const client = new Client({ name: 'smoke', version: '1.0.0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(URL_), { requestInit: { headers: { authorization: `Bearer ${KEY}` } } }));
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 10);
+    assert.equal(tools.length, 11);
     const result = await client.callTool({ name: 'get_summary', arguments: { days: 3 } });
     assert.equal(result.isError, undefined);
     const content = result.content as Array<{ type: string; text: string }>;

@@ -91,6 +91,10 @@ async function route(db: FitnessDb, req: IncomingMessage, res: ServerResponse, u
   if (path === '/month' && method === 'GET') {
     return send(res, 200, service.getMonth(db, url.searchParams.get('month') ?? ''));
   }
+  if (path === '/trends' && method === 'GET') {
+    const weeks = url.searchParams.get('weeks');
+    return send(res, 200, service.getTrends(db, weeks === null ? undefined : Number(weeks)));
+  }
   if (path === '/profile' && method === 'GET') return send(res, 200, db.getProfile());
   if (path === '/profile' && method === 'PATCH') {
     return send(res, 200, service.updateProfile(db, ProfilePatch.parse(await readJson(req))));
