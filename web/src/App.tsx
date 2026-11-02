@@ -59,8 +59,8 @@ export function App() {
       },
       notify,
       authRequired: auth.required,
-      signOut: () => {
-        api.logout().finally(() => setAuth((a) => ({ ...a, status: 'out' })));
+      signOut: (everywhere) => {
+        (everywhere ? api.logoutEverywhere() : api.logout()).finally(() => setAuth((a) => ({ ...a, status: 'out' })));
       },
     }),
     [auth.required, notify],

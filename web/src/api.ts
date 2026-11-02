@@ -83,6 +83,7 @@ export const api = {
   session: () => request<{ auth_required: boolean; authenticated: boolean }>('GET', '/session'),
   login: (key: string) => request<{ authenticated: boolean }>('POST', '/login', { key }),
   logout: () => request<{ authenticated: boolean }>('POST', '/logout', {}),
+  logoutEverywhere: () => request<{ authenticated: boolean }>('POST', '/logout-everywhere', {}),
   day: (date?: string) => request<DayDetail>('GET', `/day${date ? `?date=${date}` : ''}`),
   month: (month: string) => request<MonthSummary>('GET', `/month?month=${month}`),
   trends: (weeks: number) => request<Trends>('GET', `/trends?weeks=${weeks}`),

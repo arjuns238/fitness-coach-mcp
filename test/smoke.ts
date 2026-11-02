@@ -410,6 +410,63 @@ try {
     assert.match(headers.get('set-cookie')!, /Max-Age=0/);
   });
 
+  console.log('Hardening');
+  const raw = (path: string, method = 'GET') =>
+    new Promise<{ status: number; headers: Record<string, unknown> }>((resolve, reject) => {
+      const req = request({ host: '127.0.0.1', port: PORT, path, method }, (res) => {
+        res.resume();
+        res.on('end', () => resolve({ status: res.statusCode!, headers: res.headers }));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+  await check('a malformed request target gets a 400 instead of crashing the server', async () => {
+    for (const path of ['//x:99999/', '//x:80/api/session', '*']) assert.equal((await raw(path)).status, 400);
+    assert.equal((await fetch(`${BASE}/health`)).status, 200);
+  });
+  await check('security headers on pages and API responses', async () => {
+    for (const path of ['/', '/api/session']) {
+      const res = await fetch(`${BASE}${path}`);
+      assert.match(res.headers.get('content-security-policy')!, /frame-ancestors 'none'/);
+      assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+      assert.equal(res.headers.get('x-frame-options'), 'DENY');
+      assert.equal(res.headers.get('strict-transport-security'), null); // only behind HTTPS
+    }
+    const behindTls = await fetch(`${BASE}/`, { headers: { 'x-forwarded-proto': 'https' } });
+    assert.match(behindTls.headers.get('strict-transport-security')!, /max-age=/);
+  });
+  await check('login takes only a small body, and logout only JSON', async () => {
+    assert.equal((await api('POST', '/login', { key: 'x'.repeat(5000) })).status, 413);
+    const form = await api('POST', '/logout', 'a=1', { 'content-type': 'application/x-www-form-urlencoded' });
+    assert.equal(form.status, 415);
+    assert.equal(form.headers.get('set-cookie'), null);
+  });
+  await check('stored text and lists are capped', async () => {
+    const auth = { authorization: `Bearer ${KEY}` };
+    const long = await api('POST', '/meals', { description: 'x'.repeat(501), items: [{ name: 'a', calories: 1, protein_g: 0, carbs_g: 0, fat_g: 0 }] }, auth);
+    assert.equal(long.status, 400);
+    const many = Array.from({ length: 51 }, () => ({ name: 'a', calories: 1, protein_g: 0, carbs_g: 0, fat_g: 0 }));
+    assert.equal((await api('POST', '/meals', { description: 'x', items: many }, auth)).status, 400);
+    assert.equal((await callLegacy('update_profile', { coaching_notes: 'x'.repeat(4001) })).isError, true);
+  });
+  await check('/mcp rejects oversized bodies even with the key', async () => {
+    const res = await fetch(URL_, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${KEY}` },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', padding: 'x'.repeat(300 * 1024) }),
+    });
+    assert.equal(res.status, 413);
+  });
+  await check('signing out everywhere invalidates every existing session', async () => {
+    const login = async () => (await api('POST', '/login', { key: KEY })).headers.get('set-cookie')!.split(';')[0];
+    const [phone, laptop] = [await login(), await login()];
+    assert.equal((await api('GET', '/day', undefined, { cookie: laptop })).status, 200);
+    assert.equal((await api('POST', '/logout-everywhere', {}, { cookie: phone })).status, 200);
+    assert.equal((await api('GET', '/day', undefined, { cookie: laptop })).status, 401);
+    assert.equal((await api('GET', '/day', undefined, { cookie: phone })).status, 401);
+    assert.equal((await api('GET', '/day', undefined, { cookie: await login() })).status, 200);
+  });
+
   console.log('Dashboard files');
   await check('serves the app shell, assets, and SPA fallback; 404s missing files', async () => {
     const shell = await fetch(`${BASE}/`);

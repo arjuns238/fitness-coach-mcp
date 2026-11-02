@@ -1,7 +1,7 @@
 // REST API for the web dashboard. Same service layer as the MCP tools, so edits from either side match.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import * as z from 'zod/v4';
-import { authRequired, clearedSessionCookie, dashboardAuthorized, keyMatches, sessionCookie } from './auth.ts';
+import { authRequired, clearedSessionCookie, dashboardAuthorized, keyMatches, sessionCookie, setSessionEpoch } from './auth.ts';
 import type { FitnessDb } from './db.ts';
 import { InputError, NotFoundError } from './errors.ts';
 import { DateInput, MealFields, ProfilePatch, WeightFields, WorkoutFields } from './schemas.ts';
@@ -9,6 +9,8 @@ import * as service from './service.ts';
 import type { EntryKind } from './types.ts';
 
 const MAX_BODY_BYTES = 1024 * 1024;
+/** Login is read before anyone is authenticated, so it gets a much smaller body limit. */
+const MAX_LOGIN_BYTES = 4096;
 
 class HttpError extends Error {
   status: number;
@@ -23,14 +25,14 @@ function send(res: ServerResponse, status: number, body: unknown, headers: Recor
   res.end(JSON.stringify(body));
 }
 
-async function readJson(req: IncomingMessage): Promise<unknown> {
+async function readJson(req: IncomingMessage, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   // Requiring a JSON content type means a cross-site form post can't reach a handler (on top of SameSite=Strict).
   if (!req.headers['content-type']?.startsWith('application/json')) throw new HttpError(415, 'Expected application/json');
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BODY_BYTES) throw new HttpError(413, 'Request body too large');
+    if (size > maxBytes) throw new HttpError(413, 'Request body too large');
     chunks.push(chunk as Buffer);
   }
   try {
@@ -75,15 +77,23 @@ async function route(db: FitnessDb, req: IncomingMessage, res: ServerResponse, u
     return send(res, 200, { auth_required: authRequired(), authenticated: dashboardAuthorized(req) });
   }
   if (path === '/login' && method === 'POST') {
-    const { key } = z.object({ key: z.string() }).parse(await readJson(req));
+    const { key } = z.object({ key: z.string().max(256) }).parse(await readJson(req, MAX_LOGIN_BYTES));
     if (!keyMatches(key)) throw new HttpError(401, 'Wrong key');
     return send(res, 200, { authenticated: true }, { 'set-cookie': sessionCookie(req) });
   }
   if (path === '/logout' && method === 'POST') {
+    // JSON only, like every other POST, so another site can't sign you out with a form.
+    await readJson(req, MAX_LOGIN_BYTES);
     return send(res, 200, { authenticated: false }, { 'set-cookie': clearedSessionCookie(req) });
   }
 
   if (!dashboardAuthorized(req)) throw new HttpError(401, 'Not signed in');
+
+  if (path === '/logout-everywhere' && method === 'POST') {
+    await readJson(req, MAX_LOGIN_BYTES);
+    setSessionEpoch(db.bumpSessionEpoch());
+    return send(res, 200, { authenticated: false }, { 'set-cookie': clearedSessionCookie(req) });
+  }
 
   if (path === '/day' && method === 'GET') {
     return send(res, 200, service.getDay(db, DateInput.parse(url.searchParams.get('date') ?? undefined)));

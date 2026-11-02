@@ -4,8 +4,14 @@ import * as z from 'zod/v4';
 export const MAX_RANGE_DAYS = 92;
 export const MAX_TREND_WEEKS = 52;
 
+// Caps on stored text and lists: far above anything a real log needs, low enough that a runaway client can't
+// fill the database or bloat every later read.
+const ShortText = z.string().max(100);
+const LongText = z.string().max(2000);
+
 export const DateInput = z
   .string()
+  .max(20)
   .describe('Local date: YYYY-MM-DD, "today" or "yesterday". Defaults to today in the user\'s timezone.')
   .optional();
 export const TimeInput = z
@@ -13,18 +19,18 @@ export const TimeInput = z
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24h HH:MM')
   .describe('Local time, 24h HH:MM. Defaults to now if the date is today.')
   .optional();
-const NotesInput = z.string().optional();
+const NotesInput = LongText.optional();
 export const UnitInput = z.enum(['lb', 'kg']);
 export const EntryKindInput = z.enum(['meal', 'workout', 'weigh_in']);
 export const EntryId = z.number().int().positive().describe('Entry id from a log response or get_day');
 
 export const MealFields = z.object({
-  description: z.string().min(1).describe('What they ate, in their words, e.g. "chicken burrito bowl and a diet coke"'),
+  description: z.string().min(1).max(500).describe('What they ate, in their words, e.g. "chicken burrito bowl and a diet coke"'),
   items: z
     .array(
       z.object({
-        name: z.string().min(1),
-        quantity: z.string().optional().describe('Portion as described or assumed, e.g. "2 eggs", "1 cup", "large bowl"'),
+        name: ShortText.min(1),
+        quantity: ShortText.optional().describe('Portion as described or assumed, e.g. "2 eggs", "1 cup", "large bowl"'),
         calories: z.number().nonnegative(),
         protein_g: z.number().nonnegative(),
         carbs_g: z.number().nonnegative(),
@@ -32,6 +38,7 @@ export const MealFields = z.object({
       }),
     )
     .min(1)
+    .max(50)
     .describe('Each food with your best calorie and macro estimate for the portion'),
   meal_type: z.enum(['breakfast', 'lunch', 'dinner', 'snack', 'drink']).optional(),
   date: DateInput,
@@ -40,7 +47,7 @@ export const MealFields = z.object({
 });
 
 export const WorkoutFields = z.object({
-  description: z.string().min(1).describe('Short summary in their words, e.g. "push day", "5k run", "pickup basketball"'),
+  description: z.string().min(1).max(500).describe('Short summary in their words, e.g. "push day", "5k run", "pickup basketball"'),
   type: z.enum(['strength', 'cardio', 'sport', 'mobility', 'other']),
   duration_min: z.number().positive().optional(),
   effort: z
@@ -53,14 +60,11 @@ export const WorkoutFields = z.object({
   exercises: z
     .array(
       z.object({
-        name: z
-          .string()
-          .min(1)
-          .describe(
-            'Standard name in Title Case, the same every time so progress lines up: "Bench Press" (not "bench" or "flat bench"), ' +
-              '"Squat", "Deadlift", "Overhead Press", "Romanian Deadlift", "Pull-up". Name the equipment only when it isn\'t a barbell: ' +
-              '"Dumbbell Bench Press", "Cable Row".',
-          ),
+        name: ShortText.min(1).describe(
+          'Standard name in Title Case, the same every time so progress lines up: "Bench Press" (not "bench" or "flat bench"), ' +
+            '"Squat", "Deadlift", "Overhead Press", "Romanian Deadlift", "Pull-up". Name the equipment only when it isn\'t a barbell: ' +
+            '"Dumbbell Bench Press", "Cable Row".',
+        ),
         sets: z
           .array(
             z.object({
@@ -70,13 +74,15 @@ export const WorkoutFields = z.object({
               duration_sec: z.number().positive().optional(),
             }),
           )
+          .max(50)
           .optional(),
         distance: z.number().positive().optional(),
         distance_unit: z.enum(['mi', 'km']).optional(),
         duration_min: z.number().positive().optional(),
-        notes: z.string().optional(),
+        notes: LongText.optional(),
       }),
     )
+    .max(40)
     .optional(),
   date: DateInput,
   time: TimeInput,
@@ -116,9 +122,10 @@ export const ProfilePatch = z.object({
   workouts_per_week: goal,
   target_weight: goal.describe("In the profile's weight_unit. If you change weight_unit, convert and resend this too."),
   weight_unit: UnitInput.optional(),
-  timezone: z.string().optional().describe('IANA timezone, e.g. "America/Chicago". Update it when the user travels.'),
+  timezone: ShortText.optional().describe('IANA timezone, e.g. "America/Chicago". Update it when the user travels.'),
   coaching_notes: z
     .string()
+    .max(4000)
     .nullable()
     .optional()
     .describe(

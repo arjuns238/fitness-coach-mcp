@@ -92,6 +92,20 @@ export class FitnessDb {
     return { weight_unit: 'lb', timezone: this.defaultTimezone, ...stored };
   }
 
+  /** Part of every session cookie's signature; bumping it signs every browser out without touching the API key. */
+  sessionEpoch(): number {
+    const row = this.db.prepare(`SELECT value FROM settings WHERE key = 'session_epoch'`).get() as { value: string } | undefined;
+    return row ? Number(JSON.parse(row.value)) : 0;
+  }
+
+  bumpSessionEpoch(): number {
+    const next = this.sessionEpoch() + 1;
+    this.db
+      .prepare(`INSERT INTO settings (key, value) VALUES ('session_epoch', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`)
+      .run(JSON.stringify(next));
+    return next;
+  }
+
   /** Merges the patch into the stored profile; a null value clears that field. */
   updateProfile(patch: Record<string, unknown>): Profile {
     const row = this.db.prepare(`SELECT value FROM settings WHERE key = 'profile'`).get() as { value: string } | undefined;

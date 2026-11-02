@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { config } from './config.ts';
+import { config, isLoopback } from './config.ts';
 
 const SESSION_COOKIE = 'fc_session';
 const SESSION_SECONDS = 90 * 24 * 60 * 60;
@@ -22,8 +22,13 @@ export function requestKey(req: IncomingMessage): string | undefined {
   return typeof apiKey === 'string' ? apiKey : undefined;
 }
 
-// Sessions are `<issued-at>.<hmac>`, keyed by the API key, so rotating the key signs every browser out.
-const sign = (issuedAt: string) => createHmac('sha256', config.apiKey).update(`session:${issuedAt}`).digest('base64url');
+// Sessions are `<issued-at>.<hmac>`, keyed by the API key and signed with the current epoch: rotating the key or
+// bumping the epoch ("sign out everywhere") invalidates every existing cookie.
+let epoch = 0;
+export const setSessionEpoch = (value: number) => {
+  epoch = value;
+};
+const sign = (issuedAt: string) => createHmac('sha256', config.apiKey).update(`session:${epoch}:${issuedAt}`).digest('base64url');
 
 function validSession(token: string | undefined): boolean {
   if (!token) return false;
@@ -51,8 +56,9 @@ export function dashboardAuthorized(req: IncomingMessage): boolean {
 }
 
 function cookieAttributes(req: IncomingMessage) {
-  // Hosts terminate TLS in front of the app and say so in X-Forwarded-Proto.
-  const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  // Hosts terminate TLS in front of the app and say so in X-Forwarded-Proto. Anywhere but loopback the
+  // dashboard is only meant to be served over HTTPS, so the cookie is Secure there regardless.
+  const secure = req.headers['x-forwarded-proto'] === 'https' || !isLoopback(config.host) ? '; Secure' : '';
   return `HttpOnly; SameSite=Strict; Path=/${secure}`;
 }
 

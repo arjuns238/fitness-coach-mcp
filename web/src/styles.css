@@ -989,6 +989,15 @@ a {
   align-items: center;
 }
 
+.sign-out-everywhere {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.link-button.danger {
+  color: var(--critical);
+}
+
 .error-text {
   color: var(--critical);
   font-size: 0.875rem;

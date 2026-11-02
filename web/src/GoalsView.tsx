@@ -120,7 +120,7 @@ function GoalsForm({ profile }: { profile: Profile }) {
 
       <div className="form-actions">
         {authRequired ? (
-          <button type="button" className="button" onClick={signOut}>
+          <button type="button" className="button" onClick={() => signOut()}>
             Sign out
           </button>
         ) : (
@@ -130,6 +130,19 @@ function GoalsForm({ profile }: { profile: Profile }) {
           {busy ? 'Saving…' : 'Save goals'}
         </button>
       </div>
+      {authRequired && <SignOutEverywhere onConfirm={() => signOut(true)} />}
     </form>
+  );
+}
+
+/** For a lost phone: ends every dashboard session without changing the key Claude uses. Asks for a second tap. */
+function SignOutEverywhere({ onConfirm }: { onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false);
+  return (
+    <p className="fine-print sign-out-everywhere">
+      <button type="button" className={`link-button${armed ? ' danger' : ''}`} onClick={() => (armed ? onConfirm() : setArmed(true))}>
+        {armed ? 'Tap again to sign out every device' : 'Sign out on all devices'}
+      </button>
+    </p>
   );
 }

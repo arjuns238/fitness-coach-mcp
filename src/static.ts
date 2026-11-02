@@ -2,6 +2,7 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
+import { pipeline } from 'node:stream';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -48,6 +49,7 @@ export function createStaticHandler(dir: string) {
 
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'cache-control': cache });
     if (req.method === 'HEAD') res.end();
-    else createReadStream(file).pipe(res);
+    // pipeline destroys both streams on error; a bare pipe() would leave a read error unhandled and crash.
+    else pipeline(createReadStream(file), res, () => {});
   };
 }

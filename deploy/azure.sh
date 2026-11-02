@@ -57,9 +57,12 @@ if [ ! -s "$KEY_FILE" ]; then
 fi
 
 TAG="$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo -dirty)-$(date -u +%Y%m%d%H%M%S)"
-IMAGE="$AZ_ACR.azurecr.io/$APP:$TAG"
-echo "== build $IMAGE (in the cloud, a few minutes)"
+echo "== build $AZ_ACR.azurecr.io/$APP:$TAG (in the cloud, a few minutes)"
 az acr build -r "$AZ_ACR" -t "$APP:$TAG" --platform linux/amd64 . -o none
+# Run the exact image just built, by digest: a tag can be re-pushed, and every scale-up pulls the image again.
+DIGEST=$(az acr repository show -n "$AZ_ACR" --image "$APP:$TAG" --query digest -o tsv)
+IMAGE="$AZ_ACR.azurecr.io/$APP@$DIGEST"
+echo "   $IMAGE"
 
 ENV_ID=$(az containerapp env show -n "$AZ_ENV" -g "$AZ_RG" --query id -o tsv)
 LOCATION=$(az containerapp env show -n "$AZ_ENV" -g "$AZ_RG" --query location -o tsv)

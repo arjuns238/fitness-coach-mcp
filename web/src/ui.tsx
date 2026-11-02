@@ -7,7 +7,8 @@ export interface AppContextValue {
   report: (error: unknown) => void;
   notify: (message: string) => void;
   authRequired: boolean;
-  signOut: () => void;
+  /** Ends this browser's session, or with `everywhere` every session on every device. */
+  signOut: (everywhere?: boolean) => void;
 }
 
 export const AppContext = createContext<AppContextValue>(null!);
