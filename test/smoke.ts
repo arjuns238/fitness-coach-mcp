@@ -457,6 +457,22 @@ try {
     });
     assert.equal(res.status, 413);
   });
+  await check('the key works with or without "Bearer " and with stray whitespace; OAuth discovery is a plain 404', async () => {
+    const list = (authorization: string) =>
+      fetch(URL_, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization, 'mcp-protocol-version': '2025-06-18' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      }).then((r) => r.status);
+    assert.equal(await list(KEY), 200);
+    assert.equal(await list(`bearer  ${KEY} `), 200);
+    assert.equal(await list(`Bearer ${KEY}x`), 401);
+    for (const path of ['/.well-known/oauth-protected-resource', '/.well-known/oauth-authorization-server', '/register']) {
+      const res = await fetch(`${BASE}${path}`, { method: path === '/register' ? 'POST' : 'GET' });
+      assert.equal(res.status, 404);
+      assert.match(res.headers.get('content-type')!, /json/);
+    }
+  });
   await check('signing out everywhere invalidates every existing session', async () => {
     const login = async () => (await api('POST', '/login', { key: KEY })).headers.get('set-cookie')!.split(';')[0];
     const [phone, laptop] = [await login(), await login()];

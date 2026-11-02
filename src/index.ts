@@ -2,7 +2,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { hostHeaderValidation, localhostHostValidation, toNodeHandler } from '@modelcontextprotocol/node';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { handleApi } from './api.ts';
-import { authRequired, keyMatches, requestKey, setSessionEpoch } from './auth.ts';
+import { authRequired, hasValidKey, setSessionEpoch } from './auth.ts';
 import { config, isLoopback } from './config.ts';
 import { FitnessDb } from './db.ts';
 import { createServer } from './mcp.ts';
@@ -73,7 +73,7 @@ const server = createHttpServer((req, res) => {
   if (!validateHost(req, res)) return;
 
   if (url.pathname === '/mcp') {
-    if (authRequired() && !keyMatches(requestKey(req))) {
+    if (authRequired() && !hasValidKey(req)) {
       // Never log the presented key, only that a request failed and where it came from.
       console.warn('[auth] rejected /mcp request from', req.headers['x-forwarded-for'] ?? req.socket.remoteAddress);
       // A bare 401 with no WWW-Authenticate challenge, so clients don't start OAuth discovery.
@@ -81,6 +81,12 @@ const server = createHttpServer((req, res) => {
       return;
     }
     mcp(req, res).catch(logFailure);
+    return;
+  }
+  // No OAuth here: answer sign-in discovery with a plain 404 rather than the dashboard's HTML shell, so a client
+  // probing for it gets a clear "not supported".
+  if (url.pathname.startsWith('/.well-known/') || url.pathname === '/register' || url.pathname === '/authorize' || url.pathname === '/token') {
+    res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'not_found' }));
     return;
   }
   if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {

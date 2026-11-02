@@ -78,7 +78,7 @@ async function route(db: FitnessDb, req: IncomingMessage, res: ServerResponse, u
   }
   if (path === '/login' && method === 'POST') {
     const { key } = z.object({ key: z.string().max(256) }).parse(await readJson(req, MAX_LOGIN_BYTES));
-    if (!keyMatches(key)) throw new HttpError(401, 'Wrong key');
+    if (!keyMatches(key.trim())) throw new HttpError(401, 'Wrong key');
     return send(res, 200, { authenticated: true }, { 'set-cookie': sessionCookie(req) });
   }
   if (path === '/logout' && method === 'POST') {

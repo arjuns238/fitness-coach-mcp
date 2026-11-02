@@ -64,3 +64,17 @@ for (const [name, size] of [['apple-touch-icon.png', 180], ['icon-192.png', 192]
   writeFileSync(`web/public/${name}`, png(size));
   console.log(`web/public/${name}`);
 }
+
+// favicon.ico for clients that only look there (browser tabs, connector lists): an ICO wrapping a 48px PNG.
+const favicon = png(48);
+const directory = Buffer.alloc(22);
+directory.writeUInt16LE(1, 2); // type: icon
+directory.writeUInt16LE(1, 4); // one image
+directory.writeUInt8(48, 6); // width
+directory.writeUInt8(48, 7); // height
+directory.writeUInt16LE(1, 10); // color planes
+directory.writeUInt16LE(32, 12); // bits per pixel
+directory.writeUInt32LE(favicon.length, 14);
+directory.writeUInt32LE(directory.length, 18); // the image follows the directory
+writeFileSync('web/public/favicon.ico', Buffer.concat([directory, favicon]));
+console.log('web/public/favicon.ico');

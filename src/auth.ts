@@ -14,13 +14,20 @@ export function keyMatches(presented: string | undefined): boolean {
   return presented !== undefined && timingSafeEqual(digest(presented), expectedKey);
 }
 
-/** The key from `Authorization: Bearer <key>` or `X-API-Key: <key>` (how Claude's connector authenticates). */
-export function requestKey(req: IncomingMessage): string | undefined {
-  const authorization = req.headers.authorization;
-  if (authorization?.startsWith('Bearer ')) return authorization.slice('Bearer '.length);
+/**
+ * The keys a request presents: `Authorization: Bearer <key>` (or the bare key, since connector settings send the
+ * header value exactly as typed) and `X-API-Key: <key>`. Surrounding whitespace, like a pasted newline, is ignored.
+ */
+function presentedKeys(req: IncomingMessage): string[] {
+  const keys: string[] = [];
+  const authorization = req.headers.authorization?.trim();
+  if (authorization) keys.push(authorization.replace(/^bearer\s+/i, '').trim());
   const apiKey = req.headers['x-api-key'];
-  return typeof apiKey === 'string' ? apiKey : undefined;
+  if (typeof apiKey === 'string' && apiKey.trim()) keys.push(apiKey.trim());
+  return keys;
 }
+
+export const hasValidKey = (req: IncomingMessage) => presentedKeys(req).some(keyMatches);
 
 // Sessions are `<issued-at>.<hmac>`, keyed by the API key and signed with the current epoch: rotating the key or
 // bumping the epoch ("sign out everywhere") invalidates every existing cookie.
@@ -52,7 +59,7 @@ function cookie(req: IncomingMessage, name: string): string | undefined {
 /** Dashboard requests: a session cookie, or the API key itself (handy for curl). */
 export function dashboardAuthorized(req: IncomingMessage): boolean {
   if (!authRequired()) return true;
-  return validSession(cookie(req, SESSION_COOKIE)) || keyMatches(requestKey(req));
+  return validSession(cookie(req, SESSION_COOKIE)) || hasValidKey(req);
 }
 
 function cookieAttributes(req: IncomingMessage) {
