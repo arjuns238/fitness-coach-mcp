@@ -3,7 +3,7 @@
 // and the 2026-07-28 flow via the official client.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,9 +13,13 @@ const PORT = 3917;
 const KEY = 'smoke-test-key';
 const URL_ = `http://127.0.0.1:${PORT}/mcp`;
 const dir = mkdtempSync(join(tmpdir(), 'fitness-smoke-'));
+// A stand-in for the built dashboard, so this test doesn't depend on `npm run build`.
+mkdirSync(join(dir, 'web/assets'), { recursive: true });
+writeFileSync(join(dir, 'web/index.html'), '<!doctype html><title>shell</title>');
+writeFileSync(join(dir, 'web/assets/app-abc123.js'), 'console.log(1)');
 
 const server = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', 'src/index.ts'], {
-  env: { ...process.env, PORT: String(PORT), MCP_API_KEY: KEY, DB_PATH: join(dir, 'test.db'), USER_TIMEZONE: 'America/Chicago' },
+  env: { ...process.env, PORT: String(PORT), MCP_API_KEY: KEY, DB_PATH: join(dir, 'test.db'), WEB_DIR: join(dir, 'web'), USER_TIMEZONE: 'America/Chicago' },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 await new Promise<void>((resolve, reject) => {
@@ -276,6 +280,148 @@ try {
   });
   await check('schema validation rejects a meal with no items', async () => {
     assert.equal((await callLegacy('log_meal', { description: 'nothing', items: [] })).isError, true);
+  });
+
+  console.log('Dashboard API');
+  const BASE = `http://127.0.0.1:${PORT}`;
+  let session = '';
+  async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = {}) {
+    const res = await fetch(`${BASE}/api${path}`, {
+      method,
+      headers: {
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+        ...(session ? { cookie: session } : {}),
+        ...headers,
+      },
+      body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+    });
+    return { status: res.status, data: await res.json().catch(() => undefined), headers: res.headers };
+  }
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
+
+  await check('session reports auth required and signed out', async () => {
+    const { data } = await api('GET', '/session');
+    assert.deepEqual(data, { auth_required: true, authenticated: false });
+    assert.equal((await api('GET', '/day')).status, 401);
+  });
+  await check('login rejects a wrong key and sets a strict HttpOnly cookie for the right one', async () => {
+    assert.equal((await api('POST', '/login', { key: 'nope' })).status, 401);
+    const { status, headers } = await api('POST', '/login', { key: KEY });
+    assert.equal(status, 200);
+    const cookie = headers.get('set-cookie')!;
+    assert.match(cookie, /HttpOnly/);
+    assert.match(cookie, /SameSite=Strict/);
+    assert.doesNotMatch(cookie, /Secure/); // plain http locally
+    session = cookie.split(';')[0];
+    assert.deepEqual((await api('GET', '/session')).data, { auth_required: true, authenticated: true });
+  });
+  await check('a forged or tampered session cookie is rejected', async () => {
+    const [name, value] = session.split('=');
+    const [issued] = value.split('.');
+    const forged = await fetch(`${BASE}/api/day`, { headers: { cookie: `${name}=${issued}.AAAA` } });
+    assert.equal(forged.status, 401);
+  });
+  await check('the API key also works as a bearer token', async () => {
+    const res = await fetch(`${BASE}/api/profile`, { headers: { authorization: `Bearer ${KEY}` } });
+    assert.equal(res.status, 200);
+  });
+  await check('mutations require a JSON body', async () => {
+    const res = await api('POST', '/meals', 'description=x', { 'content-type': 'application/x-www-form-urlencoded' });
+    assert.equal(res.status, 415);
+  });
+  let mealId = 0;
+  await check('create, edit and delete a meal', async () => {
+    const created = await api('POST', '/meals', {
+      description: 'greek yogurt bowl',
+      meal_type: 'snack',
+      date: today,
+      time: '16:00',
+      items: [{ name: 'greek yogurt', quantity: '1 cup', calories: 150, protein_g: 20, carbs_g: 8, fat_g: 4 }],
+    });
+    assert.equal(created.status, 200);
+    mealId = created.data.logged.id;
+    const edited = await api('PATCH', `/meals/${mealId}`, {
+      items: [
+        { name: 'greek yogurt', quantity: '1 cup', calories: 150, protein_g: 20, carbs_g: 8, fat_g: 4 },
+        { name: 'honey', quantity: '1 tbsp', calories: 64, protein_g: 0, carbs_g: 17, fat_g: 0 },
+      ],
+      notes: 'added honey',
+    });
+    assert.equal(edited.data.updated.calories, 214);
+    assert.equal(edited.data.updated.notes, 'added honey');
+    assert.equal(edited.data.updated.local_time, '16:00');
+    const day = await api('GET', `/day?date=${today}`);
+    assert.ok(day.data.meals.some((m: { id: number }) => m.id === mealId));
+  });
+  await check('validation and not-found errors come back as 400 / 404 with a message', async () => {
+    const bad = await api('POST', '/meals', { description: 'x', items: [] });
+    assert.equal(bad.status, 400);
+    assert.match(bad.data.error, /items/);
+    assert.equal((await api('PATCH', '/workouts/9999', { effort: 5 })).status, 404);
+    assert.equal((await api('GET', '/day?date=2026-13-45')).status, 400);
+    assert.equal((await api('GET', '/nope')).status, 404);
+  });
+  await check('workouts and weigh-ins round-trip', async () => {
+    const workout = await api('POST', '/workouts', {
+      description: 'easy run',
+      type: 'cardio',
+      date: today,
+      time: '07:00',
+      exercises: [{ name: 'run', distance: 3.1, distance_unit: 'mi', duration_min: 28 }],
+    });
+    assert.equal(workout.status, 200);
+    const weigh = await api('POST', '/weigh-ins', { weight: 81.5, unit: 'kg', date: today, time: '07:30' });
+    assert.equal(weigh.data.logged.unit, 'kg');
+    assert.equal((await api('PATCH', `/weigh-ins/${weigh.data.logged.id}`, { weight: 81.2 })).data.updated.weight, 81.2);
+    assert.equal((await api('DELETE', `/workouts/${workout.data.logged.id}`)).status, 200);
+    assert.equal((await api('DELETE', `/workouts/${workout.data.logged.id}`)).status, 404);
+  });
+  await check('month summary covers every day of the month', async () => {
+    const { data } = await api('GET', '/month?month=2026-02');
+    assert.equal(data.days.length, 28);
+    assert.equal(data.days[0].date, '2026-02-01');
+    assert.equal((await api('GET', '/month?month=2026-2')).status, 400);
+  });
+  await check('profile updates, validation, and recent meals', async () => {
+    const { data } = await api('PATCH', '/profile', { daily_fat_g: 70, coaching_notes: null });
+    assert.equal(data.daily_fat_g, 70);
+    assert.equal(data.coaching_notes, undefined);
+    assert.equal((await api('PATCH', '/profile', { timezone: 'Nowhere/Land' })).status, 400);
+    const recent = await api('GET', '/recent-meals');
+    assert.equal(recent.data[0].description, 'greek yogurt bowl');
+    assert.equal((await api('DELETE', `/meals/${mealId}`)).status, 200);
+  });
+  await check('logout clears the cookie', async () => {
+    const { headers } = await api('POST', '/logout', {});
+    assert.match(headers.get('set-cookie')!, /Max-Age=0/);
+  });
+
+  console.log('Dashboard files');
+  await check('serves the app shell, assets, and SPA fallback; 404s missing files', async () => {
+    const shell = await fetch(`${BASE}/`);
+    assert.equal(shell.status, 200);
+    assert.match(shell.headers.get('content-type')!, /text\/html/);
+    assert.equal(shell.headers.get('cache-control'), 'no-cache');
+    const asset = await fetch(`${BASE}/assets/app-abc123.js`);
+    assert.match(asset.headers.get('cache-control')!, /immutable/);
+    assert.equal((await fetch(`${BASE}/history/2026-11`)).status, 200);
+    assert.equal((await fetch(`${BASE}/assets/missing.js`)).status, 404);
+  });
+  await check('path traversal cannot reach files outside the web root', async () => {
+    // The database sits one level above the web root; send raw paths so nothing normalizes them first.
+    for (const path of ['/../test.db', '/%2e%2e/test.db', '/assets/..%2f..%2ftest.db']) {
+      const { status, body } = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+        const req = request({ host: '127.0.0.1', port: PORT, path }, (res) => {
+          let body = '';
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => resolve({ status: res.statusCode!, body }));
+        });
+        req.on('error', reject);
+        req.end();
+      });
+      assert.equal(status, 404, path);
+      assert.doesNotMatch(body, /SQLite/, path);
+    }
   });
 
   console.log('2026-07-28 flow (official client)');

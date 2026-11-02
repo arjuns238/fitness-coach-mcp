@@ -4,6 +4,8 @@ export const config = {
   /** Shared secret Claude sends on every request (Authorization: Bearer <key> or X-API-Key). */
   apiKey: process.env.MCP_API_KEY ?? '',
   dbPath: process.env.DB_PATH ?? 'data/fitness.db',
+  /** The built dashboard (`npm run build`). */
+  webDir: process.env.WEB_DIR ?? 'web/dist',
   /** Public hostnames this server answers to, e.g. "fitness-coach.fly.dev". */
   allowedHosts: (process.env.ALLOWED_HOSTS ?? '')
     .split(',')

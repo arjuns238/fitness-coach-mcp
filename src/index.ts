@@ -1,10 +1,12 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
-import { createServer as createHttpServer, type IncomingMessage } from 'node:http';
+import { createServer as createHttpServer } from 'node:http';
 import { hostHeaderValidation, localhostHostValidation, toNodeHandler } from '@modelcontextprotocol/node';
 import { createMcpHandler } from '@modelcontextprotocol/server';
+import { handleApi } from './api.ts';
+import { authRequired, keyMatches, requestKey } from './auth.ts';
 import { config, isLoopback } from './config.ts';
 import { FitnessDb } from './db.ts';
 import { createServer } from './mcp.ts';
+import { createStaticHandler } from './static.ts';
 
 if (!isLoopback(config.host) && !config.apiKey) {
   console.error(`Refusing to listen on ${config.host} without MCP_API_KEY: anyone who finds the URL could read and write your log.`);
@@ -19,6 +21,7 @@ const handler = createMcpHandler(() => createServer(db), {
   onerror: (error) => console.error('[mcp]', error.message),
 });
 const mcp = toNodeHandler(handler, { onerror: (error) => console.error('[mcp]', error) });
+const serveStatic = createStaticHandler(config.webDir);
 
 const validateHost = config.allowedHosts.length
   ? hostHeaderValidation(config.allowedHosts)
@@ -26,40 +29,34 @@ const validateHost = config.allowedHosts.length
     ? localhostHostValidation()
     : () => true;
 
-const digest = (value: string) => createHash('sha256').update(value).digest();
-const expectedKey = digest(config.apiKey);
-
-function authorized(req: IncomingMessage): boolean {
-  if (!config.apiKey) return true;
-  const authorization = req.headers.authorization;
-  const bearer = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : undefined;
-  const apiKey = req.headers['x-api-key'];
-  const presented = bearer ?? (typeof apiKey === 'string' ? apiKey : undefined);
-  return presented !== undefined && timingSafeEqual(digest(presented), expectedKey);
-}
-
 const server = createHttpServer((req, res) => {
-  const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+  const url = new URL(req.url ?? '/', 'http://localhost');
 
-  if (path === '/health') {
+  if (url.pathname === '/health') {
     res.writeHead(200, { 'content-type': 'text/plain' }).end('ok');
     return;
   }
-  if (path !== '/mcp') {
-    res.writeHead(404).end();
-    return;
-  }
   if (!validateHost(req, res)) return;
-  if (!authorized(req)) {
-    // A bare 401 with no WWW-Authenticate challenge, so clients don't start OAuth discovery.
-    res.writeHead(401, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'unauthorized' }));
+
+  if (url.pathname === '/mcp') {
+    if (authRequired() && !keyMatches(requestKey(req))) {
+      // A bare 401 with no WWW-Authenticate challenge, so clients don't start OAuth discovery.
+      res.writeHead(401, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'unauthorized' }));
+      return;
+    }
+    void mcp(req, res);
     return;
   }
-  void mcp(req, res);
+  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+    void handleApi(db, req, res, url);
+    return;
+  }
+  serveStatic(req, res, url.pathname);
 });
 
 server.listen(config.port, config.host, () => {
   console.log(`fitness-coach MCP server on http://${config.host}:${config.port}/mcp (db: ${config.dbPath}, auth: ${config.apiKey ? 'on' : 'off'})`);
+  console.log(`dashboard on http://${config.host}:${config.port}/`);
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

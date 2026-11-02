@@ -2,7 +2,7 @@
 
 A meal and workout log that Claude reads and writes for you. Say "had a burrito bowl and a 3 mile run" in the Claude app and Claude logs both with its best macro estimate, tells you where the day stands, and asks a question or two when a detail would change the numbers (portion, oil, missing weights). Your answers update the same entries. Ask "how was my week?" and it pulls the numbers before coaching you.
 
-It's a remote MCP server (Streamable HTTP) with a SQLite database, added to your Claude account as a custom connector.
+It's a remote MCP server (Streamable HTTP) with a SQLite database, added to your Claude account as a custom connector. The same server hosts a small web dashboard for reviewing and fixing entries by hand, so edits made in the app and edits made by Claude always match.
 
 ## Tools
 
@@ -19,6 +19,16 @@ It's a remote MCP server (Streamable HTTP) with a SQLite database, added to your
 
 Dates are your local calendar days in the profile's timezone, so a server running in UTC still files an 11pm snack under the right day. Log tools accept `"today"`, `"yesterday"` or `YYYY-MM-DD`.
 
+## Dashboard
+
+A mobile-first web app served from the same server (`/`), installable on iPhone via Safari → Share → **Add to Home Screen**.
+
+- **Today**: calories and macros against your goals, the day's meals, workouts and weigh-ins. Tap any entry to edit or delete it, or add one by hand (including "repeat a recent meal"). Arrows and the calendar button move between days.
+- **History**: a month calendar showing which days you logged and which days met your goals (calories within 10% and protein reached), plus workout days.
+- **Goals**: daily targets, weight unit, target weight, timezone, and the coaching notes Claude reads.
+
+Sign in once with the same `MCP_API_KEY`; the browser keeps a signed, HttpOnly session cookie for 90 days. Rotating the key signs every device out.
+
 ## Run locally
 
 Requires Node 24+ (uses the built-in `node:sqlite` and native TypeScript support, no build step).
@@ -26,7 +36,10 @@ Requires Node 24+ (uses the built-in `node:sqlite` and native TypeScript support
 ```bash
 npm install
 npm test          # end-to-end smoke test against a throwaway database
-npm run dev       # http://127.0.0.1:3000/mcp, data in data/fitness.db
+npm run build     # build the dashboard into web/dist
+npm run dev       # MCP at http://127.0.0.1:3000/mcp, dashboard at http://127.0.0.1:3000/, data in data/fitness.db
+npm run web       # optional: dashboard with hot reload at http://localhost:5173 (API proxied to :3000)
+npm run typecheck
 ```
 
 With no `MCP_API_KEY` set and bound to localhost, auth is off. The server refuses to listen on a public interface without a key.
@@ -58,7 +71,7 @@ Use the full path from `which node`, since Claude Desktop doesn't load your shel
 
 ## Deploy
 
-Any host that gives you HTTPS and a persistent disk works (Fly.io, Railway, Render, a VPS). The `Dockerfile` serves on port 8080 and stores the database at `/data/fitness.db`, so mount a volume at `/data`.
+Any host that gives you HTTPS and persistent storage works. The `Dockerfile` builds the dashboard, serves everything on port 8080, and stores the database at `/data/fitness.db`, so mount persistent storage at `/data`.
 
 Environment:
 
