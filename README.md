@@ -102,7 +102,7 @@ Environment:
 
 ## Connect to Claude
 
-1. In claude.ai: **Customize → Connectors → Add → Add custom connector**. Enter a name and `https://<your-host>/mcp`, then **Continue**.
+1. In claude.ai: **Customize → Connectors → Add → Add custom connector**. Enter a name and `https://<your-host>/mcp`, then **Continue**. It checks the server before you've entered the key, so expect "Couldn't check the server" and choose **Continue anyway**.
 2. Under **Authentication**, choose **No sign-in**.
 3. Under **Request headers**, add `Authorization` with the value `Bearer <MCP_API_KEY>`. Claude sends the value exactly as typed, so include `Bearer `. `X-API-Key: <MCP_API_KEY>` works too.
 4. The connector then shows up in the Claude iPhone app. Start a chat, tap the mic and dictate.
