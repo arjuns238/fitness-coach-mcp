@@ -35,7 +35,7 @@ export function HistoryView({ month = browserMonth() }: { month?: string }) {
           ›
         </a>
       </header>
-      {data ? <Month data={data} /> : <p className="loading">Loading…</p>}
+      {data ? <Month key={data.range.start} data={data} /> : <p className="loading">Loading…</p>}
     </>
   );
 }

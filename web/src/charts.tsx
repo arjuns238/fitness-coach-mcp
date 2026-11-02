@@ -1,9 +1,12 @@
 // Small SVG charts for the Trends tab: columns with a goal line, and lines/dots over days. One series hue (the
 // accent ramp), hairline grid, values in a tooltip on hover, tap or arrow keys, and a table twin for each.
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 
 const MARGIN = { top: 14, right: 8, bottom: 24, left: 40 };
 const MIN_TICK_SPACING = 52;
+
+/** Where a mark sits left to right (0-1), so columns grow and dots appear in a sweep that follows the line. */
+const sweep = (i: number, count: number) => ({ '--t': count > 1 ? i / (count - 1) : 0 }) as CSSProperties;
 
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
@@ -183,6 +186,7 @@ export function ColumnChart({ columns, reference, height = 168, label }: { colum
               <path
                 key={i}
                 className={`column${column.partial ? ' partial' : ''}${active === i ? ' active' : ''}`}
+                style={sweep(i, columns.length)}
                 d={`M${x0},${plotBottom}V${top + r}Q${x0},${top} ${x0 + r},${top}H${x1 - r}Q${x1},${top} ${x1},${top + r}V${plotBottom}Z`}
               />
             );
@@ -270,10 +274,10 @@ export function LineChart({
           {active !== undefined && <line className="crosshair" x1={x(active)} x2={x(active)} y1={MARGIN.top} y2={plotBottom} />}
           {series.map((s, k) =>
             s.kind === 'line' ? (
-              <path key={k} className={`series-line tone-${s.tone}`} d={path(s)} />
+              <path key={k} className={`series-line tone-${s.tone}`} d={path(s)} pathLength={1} />
             ) : (
               <g key={k} className={`series-dots tone-${s.tone}`}>
-                {s.values.map((v, i) => (v === undefined ? null : <circle key={i} cx={x(i)} cy={y(v)} r={active === i ? 5.5 : 4} />))}
+                {s.values.map((v, i) => (v === undefined ? null : <circle key={i} cx={x(i)} cy={y(v)} r={active === i ? 5.5 : 4} style={sweep(i, count)} />))}
               </g>
             ),
           )}

@@ -13,6 +13,43 @@ export interface AppContextValue {
 export const AppContext = createContext<AppContextValue>(null!);
 export const useApp = () => useContext(AppContext);
 
+const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Eases a number toward `target` (ease-out, ~0.7s), starting from wherever it is now. */
+export function useCountUp(target: number, duration = 700): number {
+  const [value, setValue] = useState(() => (prefersReducedMotion() ? target : 0));
+  const shown = useRef(value);
+  useEffect(() => {
+    if (prefersReducedMotion()) {
+      shown.current = target;
+      setValue(target);
+      return;
+    }
+    const from = shown.current;
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      shown.current = from + (target - from) * (1 - (1 - progress) ** 3);
+      setValue(shown.current);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, duration]);
+  return value;
+}
+
+/** False on the first frame, then true: lets a CSS transition run from the empty state when something mounts. */
+function useMounted(): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return mounted;
+}
+
 /**
  * A value against a daily goal. "limit" goals (calories) turn the bar to a warning color when exceeded;
  * "target" goals (protein) turn it green when reached. Every state is also spelled out in text.
@@ -33,6 +70,8 @@ export function Meter({
   hero?: boolean;
 }) {
   const pct = goal ? Math.min(100, (value / goal) * 100) : 0;
+  const mounted = useMounted();
+  const shownValue = useCountUp(value);
   const over = goal !== undefined && value > goal;
   const state = kind === 'limit' && over ? 'over' : kind === 'target' && goal !== undefined && value >= goal ? 'good' : 'normal';
 
@@ -54,7 +93,7 @@ export function Meter({
             <span className="label">{label}</span>
           </div>
           <div className="hero">
-            <span className="hero-value">{formatNumber(value)}</span>
+            <span className="hero-value">{formatNumber(shownValue)}</span>
             <span className="hero-of">{goal ? `of ${formatNumber(goal)} ${unit}` : unit}</span>
           </div>
         </>
@@ -69,7 +108,7 @@ export function Meter({
       )}
       {goal !== undefined && (
         <div className="track">
-          <div className="fill" data-state={state} style={{ width: `${pct}%` }} />
+          <div className="fill" data-state={state} style={{ width: `${mounted ? pct : 0}%` }} />
         </div>
       )}
       <div className="meter-note">{note}</div>

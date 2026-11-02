@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { api, type Lift, type Trends } from './api.ts';
 import { ColumnChart, DataTable, Legend, LineChart, type Column, type Key } from './charts.tsx';
 import { formatDay, formatDecimal, formatNumber, formatShortDate, formatSigned } from './format.ts';
-import { Meter, useAsync } from './ui.tsx';
+import { Meter, useAsync, useCountUp } from './ui.tsx';
 
 function Stat({ value, unit, label }: { value: string; unit?: string; label: string }) {
   return (
@@ -54,7 +54,12 @@ export function TrendsView({ weeks }: { weeks: number }) {
           {/* Above the range control: it always covers the last 28 days. */}
           <MaintenanceCard t={data} />
           <div className="filter-row">
-            <div className="segmented" role="group" aria-label="Range">
+            <div className="segmented sliding" role="group" aria-label="Range" style={{ '--count': TREND_RANGES.length } as CSSProperties}>
+              <span
+                className="segmented-indicator"
+                aria-hidden
+                style={{ transform: `translateX(${Math.max(0, TREND_RANGES.findIndex((r) => r.weeks === weeks)) * 100}%)` }}
+              />
               {TREND_RANGES.map((range) => (
                 <button key={range.weeks} type="button" aria-pressed={range.weeks === weeks} onClick={() => (location.hash = `#/trends/${range.weeks}`)}>
                   {range.label}
@@ -62,15 +67,22 @@ export function TrendsView({ weeks }: { weeks: number }) {
               ))}
             </div>
           </div>
-          <WeightCard t={data} />
-          <NutritionCard t={data} metric="calories" />
-          <NutritionCard t={data} metric="protein" />
-          <WorkoutsCard t={data} />
-          <StrengthCard t={data} />
+          {/* A new range remounts the cards so the charts draw in again. */}
+          <div className="trend-cards" key={data.range.weeks}>
+            <WeightCard t={data} />
+            <NutritionCard t={data} metric="calories" />
+            <NutritionCard t={data} metric="protein" />
+            <WorkoutsCard t={data} />
+            <StrengthCard t={data} />
+          </div>
         </div>
       )}
     </>
   );
+}
+
+function CountUp({ value }: { value: number }) {
+  return <>{formatNumber(useCountUp(value))}</>;
 }
 
 function MaintenanceCard({ t }: { t: Trends }) {
@@ -86,7 +98,9 @@ function MaintenanceCard({ t }: { t: Trends }) {
       {m.estimate !== undefined ? (
         <>
           <div className="hero">
-            <span className="hero-value">{formatNumber(m.estimate)}</span>
+            <span className="hero-value">
+              <CountUp value={m.estimate} />
+            </span>
             <span className="hero-of">kcal a day</span>
           </div>
           <p className="card-text">

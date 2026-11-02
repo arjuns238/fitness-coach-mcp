@@ -72,10 +72,13 @@ export function App() {
   return (
     <AppContext.Provider value={context}>
       <main className="app">
-        {route.tab === 'day' && <DayView key={route.date ?? 'today'} date={route.date} />}
-        {route.tab === 'history' && <HistoryView month={route.month} />}
-        {route.tab === 'trends' && <TrendsView weeks={route.weeks} />}
-        {route.tab === 'goals' && <GoalsView />}
+        {/* Keyed by screen (and day), so switching tabs replays the entrance; a range or month change doesn't. */}
+        <div className="view" key={route.tab === 'day' ? `day:${route.date ?? 'today'}` : route.tab}>
+          {route.tab === 'day' && <DayView date={route.date} />}
+          {route.tab === 'history' && <HistoryView month={route.month} />}
+          {route.tab === 'trends' && <TrendsView weeks={route.weeks} />}
+          {route.tab === 'goals' && <GoalsView />}
+        </div>
       </main>
       <TabBar current={route.tab} />
       {toast && (

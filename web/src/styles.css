@@ -21,6 +21,7 @@
   --radius: 14px;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.05);
   --tabbar-height: 56px;
+  --ease-out: cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -337,7 +338,9 @@ a {
   height: 100%;
   border-radius: 999px;
   background: var(--accent);
-  transition: width 0.3s ease;
+  transition:
+    width 0.8s var(--ease-out),
+    background-color 0.3s ease;
 }
 
 .fill[data-state='good'] {
@@ -1119,4 +1122,231 @@ a {
   color: var(--text-3);
   padding: 32px 0;
   text-align: center;
+}
+
+/* ---------- Motion ----------
+   Short and subtle, transform and opacity only. Everything here is switched off under Reduce Motion (below). */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes grow-up {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+/* Screens: the header and cards rise in a quick stagger. */
+.view > *,
+.trend-cards > * {
+  animation: rise 0.45s var(--ease-out) both;
+}
+
+.view > :nth-child(2),
+.trend-cards > :nth-child(1) {
+  animation-delay: 40ms;
+}
+
+.view > :nth-child(3),
+.trend-cards > :nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.view > :nth-child(4),
+.trend-cards > :nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.view > :nth-child(5),
+.trend-cards > :nth-child(4) {
+  animation-delay: 160ms;
+}
+
+.view > :nth-child(n + 6),
+.trend-cards > :nth-child(n + 5) {
+  animation-delay: 200ms;
+}
+
+/* The Trends wrapper holds its cards; only they animate. */
+.view > .trends {
+  animation: none;
+}
+
+.trends > .card,
+.trends > .filter-row {
+  animation: rise 0.45s var(--ease-out) both;
+}
+
+.trends > .filter-row {
+  animation-delay: 40ms;
+}
+
+/* Columns grow from the baseline in a left-to-right sweep. */
+.chart .column {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: grow-up 0.6s var(--ease-out) both;
+  animation-delay: calc(var(--t, 0) * 350ms + 150ms);
+  transition: opacity 0.15s ease;
+}
+
+/* Lines draw in; points appear as the line reaches them. */
+.chart .series-line {
+  stroke-dasharray: 1;
+  animation: draw 0.9s ease-out 0.15s both;
+}
+
+.chart .series-dots circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop 0.3s var(--ease-out) both;
+  animation-delay: calc(var(--t, 0) * 800ms + 200ms);
+  transition: r 0.15s ease;
+}
+
+.chart .reference,
+.chart .grid,
+.chart .x-labels {
+  animation: fade 0.4s ease both;
+}
+
+.chart-tooltip {
+  animation: fade 0.12s ease both;
+}
+
+.calendar {
+  animation: fade 0.3s ease both;
+}
+
+/* The range pill slides to the selected option. */
+.segmented.sliding {
+  position: relative;
+}
+
+.segmented.sliding button {
+  position: relative;
+  z-index: 1;
+  transition: font-weight 0.2s;
+}
+
+.segmented.sliding button[aria-pressed='true'] {
+  background: none;
+  box-shadow: none;
+}
+
+.segmented-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--count));
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+  transition: transform 0.35s var(--ease-out);
+}
+
+/* Press feedback. */
+.button,
+.icon-button,
+.day-cell,
+.recent button,
+.segmented button {
+  transition:
+    transform 0.12s ease,
+    background-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.button:active:not(:disabled),
+.icon-button:active,
+.day-cell:active,
+.recent button:active {
+  transform: scale(0.96);
+}
+
+.entry {
+  transition: background-color 0.15s ease;
+  border-radius: 10px;
+}
+
+.entry:active {
+  background: var(--surface-2);
+}
+
+.tabbar a {
+  transition: color 0.2s ease;
+}
+
+.tabbar svg {
+  transition: transform 0.25s var(--ease-out);
+}
+
+.tabbar a[aria-current='page'] svg {
+  transform: translateY(-1px) scale(1.08);
+}
+
+.tabbar a:active svg {
+  transform: scale(0.9);
+}
+
+.sheet-backdrop {
+  animation: fade 0.2s ease both;
+}
+
+.sheet {
+  animation: sheet-up 0.35s var(--ease-out) both;
+}
+
+.toast {
+  animation: toast-in 0.25s var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
 }
