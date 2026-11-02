@@ -9,7 +9,9 @@
 #     SQLite on the container's disk, restored from and streamed to Blob by Litestream (deploy/litestream.yml)
 #   * a nightly job that saves a plain copy of the database to snapshots/day-DD.db (scripts/snapshot.ts)
 #
-# The API key is generated on first run and kept in $KEY_FILE, outside the repo.
+# The API key is generated on first run and kept in $KEY_FILE, outside the repo. A free USDA FoodData Central key
+# (https://fdc.nal.usda.gov/api-key-signup) in $USDA_KEY_FILE is used for label lookups when present; without it
+# the app uses USDA's shared DEMO_KEY, which allows only about 10 lookups an hour.
 #   ./deploy/azure.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -23,6 +25,7 @@ USER_TIMEZONE="${USER_TIMEZONE:-America/Chicago}"
 COOLDOWN="${COOLDOWN:-900}"             # seconds idle before scaling to zero
 SNAPSHOT_CRON="${SNAPSHOT_CRON:-0 9 * * *}"  # UTC
 KEY_FILE="${KEY_FILE:-$HOME/.config/fitness-coach/api-key}"
+USDA_KEY_FILE="${USDA_KEY_FILE:-$HOME/.config/fitness-coach/usda-key}"
 az() { command az "$@" --only-show-errors; }
 
 echo "== identity $IDENTITY"
@@ -79,6 +82,16 @@ identity:
 REGISTRY="registries:
       - server: $AZ_ACR.azurecr.io
         identity: $IDENTITY_ID"
+# The USDA key, as a secret, only when there is one.
+FDC_SECRET="" FDC_ENV=""
+if [ -s "$USDA_KEY_FILE" ]; then
+  FDC_SECRET="
+      - name: fdc-api-key
+        value: \"$(tr -d '[:space:]' < "$USDA_KEY_FILE")\""
+  FDC_ENV="
+          - { name: FDC_API_KEY, secretRef: fdc-api-key }"
+  echo "== using the USDA key in $USDA_KEY_FILE"
+fi
 STORAGE_ENV="- { name: AZURE_CLIENT_ID, value: $CLIENT_ID }
           - { name: LITESTREAM_ACCOUNT, value: $AZ_STORAGE }
           - { name: LITESTREAM_CONTAINER, value: $CONTAINER }"
@@ -98,7 +111,7 @@ properties:
     $REGISTRY
     secrets:
       - name: mcp-api-key
-        value: "$(cat "$KEY_FILE")"
+        value: "$(cat "$KEY_FILE")"$FDC_SECRET
   template:
     # Litestream gets up to 30s on shutdown to push the last changes; leave it room.
     terminationGracePeriodSeconds: 60
@@ -107,7 +120,7 @@ properties:
         image: $IMAGE
         resources: { cpu: 0.25, memory: 0.5Gi }
         env:
-          - { name: MCP_API_KEY, secretRef: mcp-api-key }
+          - { name: MCP_API_KEY, secretRef: mcp-api-key }$FDC_ENV
           - { name: ALLOWED_HOSTS, value: $FQDN }
           - { name: USER_TIMEZONE, value: $USER_TIMEZONE }
           $STORAGE_ENV

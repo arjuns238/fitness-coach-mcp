@@ -1,0 +1,22 @@
+{
+ "status": 1,
+ "product": {
+  "brands": "Quest",
+  "code": "0888849000005",
+  "nutriments": {
+   "carbohydrates_100g": 36.6666666666667,
+   "carbohydrates_serving": 22,
+   "energy-kcal_100g": 316.666666666667,
+   "energy-kcal_serving": 190,
+   "fat_100g": 11.6666666666667,
+   "fat_serving": 7,
+   "proteins_100g": 35,
+   "proteins_serving": 21
+  },
+  "nutrition_data": "on",
+  "nutrition_data_prepared_per": "100g",
+  "product_name": "Cookies & Cream Protein Bar",
+  "serving_quantity": 60,
+  "serving_size": "1 bar (60 g)"
+ }
+}

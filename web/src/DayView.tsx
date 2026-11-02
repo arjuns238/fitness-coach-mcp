@@ -4,6 +4,13 @@ import { addDays, daysBetween, formatDay, formatNumber, formatTime, setSummary, 
 import { MealSheet, WeightSheet, WorkoutSheet } from './sheets.tsx';
 import { Meter, NavArrow, useAsync } from './ui.tsx';
 
+/** How many of a meal's items use a product's label rather than an estimate. */
+function LabelNote({ items }: { items: Meal['items'] }) {
+  const labelled = items.filter((item) => item.source).length;
+  if (!labelled) return null;
+  return <div className="entry-meta label-note">✓ {labelled === items.length ? 'Label data' : `${labelled} of ${items.length} items from labels`}</div>;
+}
+
 const daysAgo = (n: number) => (n === 1 ? 'Yesterday' : n > 1 ? `${n} days ago` : `In ${-n} days`);
 
 type Editing = { kind: 'meal'; entry?: Meal } | { kind: 'workout'; entry?: Workout } | { kind: 'weight'; entry?: WeighIn } | null;
@@ -100,6 +107,7 @@ export function DayView({ date }: { date?: string }) {
               </div>
               <div className="entry-title">{meal.description}</div>
               <div className="entry-detail">{meal.items.map((item) => item.name).join(', ')}</div>
+              <LabelNote items={meal.items} />
             </div>
             <div className="entry-side">
               <strong>{formatNumber(meal.calories)} kcal</strong>

@@ -1,6 +1,6 @@
-import type { Exercise, FoodItem, MealRow, Profile, Trends, WeighInRow, WorkoutRow } from '../../src/types.ts';
+import type { Exercise, FoodItem, FoodMatch, MealRow, Profile, Trends, WeighInRow, WorkoutRow } from '../../src/types.ts';
 
-export type { Exercise, ExerciseSet, FoodItem, Lift, Profile, Trends, WeightUnit } from '../../src/types.ts';
+export type { Exercise, ExerciseSet, FoodItem, FoodMatch, Lift, Profile, Trends, WeightUnit } from '../../src/types.ts';
 
 export interface Totals {
   calories: number;
@@ -90,6 +90,8 @@ export const api = {
   profile: () => request<Profile>('GET', '/profile'),
   updateProfile: (patch: Record<string, unknown>) => request<Profile>('PATCH', '/profile', patch),
   recentMeals: () => request<MealRow[]>('GET', '/recent-meals'),
+  searchFoods: (q: string) => request<{ results: FoodMatch[] }>('GET', `/foods/search?q=${encodeURIComponent(q)}`),
+  barcode: (code: string) => request<{ result: FoodMatch | null }>('GET', `/foods/barcode/${encodeURIComponent(code)}`),
   create: (collection: Collection, body: unknown) => request<unknown>('POST', `/${collection}`, body),
   update: (collection: Collection, id: number, body: unknown) => request<unknown>('PATCH', `/${collection}/${id}`, body),
   remove: (collection: Collection, id: number) => request<unknown>('DELETE', `/${collection}/${id}`),

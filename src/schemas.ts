@@ -31,6 +31,12 @@ export const MealFields = z.object({
       z.object({
         name: ShortText.min(1),
         quantity: ShortText.optional().describe('Portion as described or assumed, e.g. "2 eggs", "1 cup", "large bowl"'),
+        brand: ShortText.optional().describe('Packaged/branded food only, e.g. "Quest". Its label replaces your estimate.'),
+        servings: z.number().positive().max(50).optional().describe('Label servings eaten, e.g. 2 for two bars. Default 1.'),
+        source: z
+          .object({ db: z.enum(['usda', 'off']), id: ShortText, product: z.string().max(200) })
+          .optional()
+          .describe('Set by the server when label data was used. Send back unchanged.'),
         calories: z.number().nonnegative(),
         protein_g: z.number().nonnegative(),
         carbs_g: z.number().nonnegative(),

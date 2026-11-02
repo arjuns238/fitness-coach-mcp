@@ -24,13 +24,14 @@ const MAX_MCP_BODY_BYTES = 256 * 1024;
 
 const SECURITY_HEADERS: Record<string, string> = {
   'content-security-policy':
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; " +
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; " +
     "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
   'referrer-policy': 'no-referrer',
   'cross-origin-opener-policy': 'same-origin',
-  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+  // The camera is for the barcode scanner; 'wasm-unsafe-eval' above lets its decoder (WebAssembly) compile.
+  'permissions-policy': 'camera=(self), microphone=(), geolocation=()',
 };
 
 const db = new FitnessDb(config.dbPath, config.defaultTimezone);

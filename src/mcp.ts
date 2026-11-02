@@ -18,6 +18,9 @@ import * as service from './service.ts';
 const INSTRUCTIONS = `Hulk: a personal nutrition and training log for one user, who you are coaching. "Hulk" is what they call it.
 They usually log by voice, so messages are casual and imprecise.
 - Log as soon as the user mentions food, a workout or a weigh-in, using your best estimate. Save first; don't wait for answers.
+- Packaged or branded food (a Quest bar, Chobani yogurt): set brand and servings on the item. The server swaps in the
+  label's numbers when it finds the product, and the item comes back with a source naming it; say which product.
+  Homemade and restaurant food stays your estimate.
 - One message can contain several things ("eggs for breakfast, then a 3 mile run"): make one log call per item.
 - Then, only if the answer would change the numbers meaningfully, ask at most two short follow-up questions.
   Meals: portion size, cooking oil or butter, sauces and dressings, drinks, restaurant vs homemade.
@@ -46,7 +49,7 @@ export function createServer(db: FitnessDb): McpServer {
         'and apply the answers with update_meal. Returns the saved entry (with its id) and the day\'s running totals against goals.',
       inputSchema: MealFields,
     },
-    async (input) => json(service.logMeal(db, input)),
+    async (input) => json(await service.logMeal(db, input)),
   );
 
   server.registerTool(
@@ -58,7 +61,7 @@ export function createServer(db: FitnessDb): McpServer {
         'Only the fields you pass change. items replaces the whole list, so send every item, not just the changed one.',
       inputSchema: MealFields.partial().extend({ id: EntryId }),
     },
-    async ({ id, ...patch }) => json(service.updateMeal(db, id, patch)),
+    async ({ id, ...patch }) => json(await service.updateMeal(db, id, patch)),
   );
 
   server.registerTool(

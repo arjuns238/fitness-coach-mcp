@@ -31,6 +31,15 @@ A mobile-first web app served from the same server (`/`), installable on iPhone 
 
 Sign in once with the same `MCP_API_KEY`; the browser keeps a signed, HttpOnly session cookie for 90 days. Rotating the key signs every device out.
 
+## Label data for packaged foods
+
+Claude estimates most foods. For packaged or branded ones it adds the brand to the item (`brand: "Quest"`, `servings: 2`), and the server swaps in the product's label numbers from [USDA FoodData Central](https://fdc.nal.usda.gov) (US branded products), with [Open Food Facts](https://world.openfoodfacts.org) as a fallback. That happens inside the same `log_meal` call, so it costs Claude almost no extra tokens. Items using label data carry a `source`; the dashboard marks them **✓ Label** and everything else **Estimate**.
+
+- **Brands only.** A product is used only when its brand matches the one Claude named, so another company's product is never swapped in. When nothing matches (or the lookup fails or is rate limited) the estimate stands.
+- **Dashboard:** the add-meal sheet can search packaged foods or scan a barcode (camera, or a photo of the barcode). Neither involves Claude.
+- **Restaurants** aren't covered by either database; Claude estimates them, or looks them up with web search if you turn that on.
+- **USDA key:** without one the server uses USDA's shared `DEMO_KEY` (about 10 lookups an hour). Get a free key at https://fdc.nal.usda.gov/api-key-signup, save it to `~/.config/fitness-coach/usda-key`, and re-run `./deploy/azure.sh`; locally, set `FDC_API_KEY`.
+
 ## Run locally
 
 Requires Node 24+ (uses the built-in `node:sqlite` and native TypeScript support, no build step).

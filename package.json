@@ -7,7 +7,7 @@
     "start": "node --disable-warning=ExperimentalWarning src/index.ts",
     "stdio": "node --disable-warning=ExperimentalWarning src/stdio.ts",
     "typecheck": "tsc && tsc -p web",
-    "test": "node --disable-warning=ExperimentalWarning test/trends.ts && node --disable-warning=ExperimentalWarning test/smoke.ts",
+    "test": "node --disable-warning=ExperimentalWarning test/trends.ts && node --disable-warning=ExperimentalWarning test/foods.ts && node --disable-warning=ExperimentalWarning test/smoke.ts",
     "web": "vite web",
     "build": "vite build web",
     "icons": "node scripts/make-icons.ts"
@@ -25,6 +25,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.2.1",
+    "barcode-detector": "3.2.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tsx": "^4.23.15",

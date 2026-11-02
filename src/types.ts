@@ -3,13 +3,35 @@
 export type WeightUnit = 'lb' | 'kg';
 export type EntryKind = 'meal' | 'workout' | 'weigh_in';
 
+/** Where an item's numbers came from when they're a product's label rather than an estimate. */
+export interface FoodSource {
+  db: 'usda' | 'off';
+  id: string;
+  product: string;
+}
+
 export interface FoodItem {
   name: string;
   quantity?: string;
+  /** Packaged or branded foods: the brand, which triggers a label lookup. */
+  brand?: string;
+  /** Label servings eaten (default 1); label numbers are per serving times this. */
+  servings?: number;
   calories: number;
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  /** Set when the numbers are label data; absent means an estimate. */
+  source?: FoodSource;
+}
+
+/** A product from a food database, with its label numbers for one serving. */
+export interface FoodMatch {
+  source: FoodSource;
+  brand?: string;
+  /** e.g. "1 bar (60 g)" */
+  serving: string;
+  per_serving: { calories: number; protein_g: number; carbs_g: number; fat_g: number };
 }
 
 export interface ExerciseSet {

@@ -1,0 +1,91 @@
+{
+ "foods": [
+  {
+   "fdcId": 2669747,
+   "description": "COOKIES & CREAM PROTEIN BAR, COOKIES & CREAM",
+   "dataType": "Branded",
+   "brandOwner": "Quest Nutrition, LLC",
+   "brandName": "QUEST",
+   "gtinUpc": "888849000005",
+   "servingSize": 60.0,
+   "servingSizeUnit": "GRM",
+   "householdServingFullText": "1 bar",
+   "foodNutrients": [
+    {
+     "nutrientNumber": "203",
+     "value": 35.0
+    },
+    {
+     "nutrientNumber": "204",
+     "value": 13.3
+    },
+    {
+     "nutrientNumber": "205",
+     "value": 35.0
+    },
+    {
+     "nutrientNumber": "208",
+     "value": 317
+    }
+   ]
+  },
+  {
+   "fdcId": 2390287,
+   "description": "COOKIES & CREAM PROTEIN BAR, COOKIES & CREAM",
+   "dataType": "Branded",
+   "brandOwner": "Lindora, Inc.",
+   "brandName": "LINDORA NUTRITION",
+   "gtinUpc": "882178400833",
+   "servingSize": 45.0,
+   "servingSizeUnit": "g",
+   "householdServingFullText": "1 bar",
+   "foodNutrients": [
+    {
+     "nutrientNumber": "203",
+     "value": 33.3
+    },
+    {
+     "nutrientNumber": "204",
+     "value": 15.6
+    },
+    {
+     "nutrientNumber": "205",
+     "value": 46.7
+    },
+    {
+     "nutrientNumber": "208",
+     "value": 378
+    }
+   ]
+  },
+  {
+   "fdcId": 2670305,
+   "description": "COOKIES & CREAM PROTEIN BARS, COOKIES & CREAM",
+   "dataType": "Branded",
+   "brandOwner": "whey good protein llc",
+   "brandName": "WHEY GOOD",
+   "gtinUpc": "860005018444",
+   "servingSize": 70.0,
+   "servingSizeUnit": "GRM",
+   "householdServingFullText": "",
+   "foodNutrients": [
+    {
+     "nutrientNumber": "203",
+     "value": 21.4
+    },
+    {
+     "nutrientNumber": "204",
+     "value": 2.14
+    },
+    {
+     "nutrientNumber": "205",
+     "value": 5.71
+    },
+    {
+     "nutrientNumber": "208",
+     "value": 129
+    }
+   ]
+  }
+ ]
+}

@@ -110,6 +110,9 @@ async function route(db: FitnessDb, req: IncomingMessage, res: ServerResponse, u
     return send(res, 200, service.updateProfile(db, ProfilePatch.parse(await readJson(req))));
   }
   if (path === '/recent-meals' && method === 'GET') return send(res, 200, service.recentMeals(db));
+  if (path === '/foods/search' && method === 'GET') return send(res, 200, await service.findFoods(url.searchParams.get('q') ?? ''));
+  const barcode = /^\/foods\/barcode\/([^/]+)$/.exec(path);
+  if (barcode && method === 'GET') return send(res, 200, await service.findBarcode(barcode[1]));
 
   const entry = /^\/(meals|workouts|weigh-ins)(?:\/(\d+))?$/.exec(path);
   if (entry) return send(res, 200, await entryRoute(db, req, entry[1], entry[2] ? Number(entry[2]) : undefined));

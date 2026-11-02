@@ -1,7 +1,7 @@
 // Add/edit forms for meals, workouts and weigh-ins, shown as bottom sheets over the day view.
-import { useEffect, useState, type FormEvent } from 'react';
-import { api, type Collection, type Exercise, type FoodItem, type Meal, type WeighIn, type WeightUnit, type Workout } from './api.ts';
-import { formatNumber } from './format.ts';
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
+import { api, type Collection, type Exercise, type FoodItem, type FoodMatch, type Meal, type WeighIn, type WeightUnit, type Workout } from './api.ts';
+import { formatDecimal, formatNumber } from './format.ts';
 import { DeleteButton, NumberField, Sheet, useApp } from './ui.tsx';
 
 interface SheetProps<T> {
@@ -67,6 +67,120 @@ function Footer({ busy, editing, onDelete, formId }: { busy: boolean; editing: b
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack', 'drink'];
 const blankItem = (): FoodItem => ({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+const MACROS = ['calories', 'protein_g', 'carbs_g', 'fat_g'] as const;
+const SOURCE_NAMES = { usda: 'USDA', off: 'Open Food Facts' };
+
+/** Loaded on first use: the barcode decoder is large. */
+const Scanner = lazy(() => import('./Scanner.tsx'));
+
+const itemFromMatch = (match: FoodMatch): FoodItem => ({
+  name: match.source.product,
+  brand: match.brand,
+  servings: 1,
+  quantity: match.serving,
+  ...match.per_serving,
+  source: match.source,
+});
+
+/** A label item eaten `servings` times: its numbers and amount scale from the current ones. */
+function withServings(item: FoodItem, servings: number): FoodItem {
+  const ratio = servings / (item.servings ?? 1);
+  const base = item.quantity?.replace(/^[\d.]+ × /, '');
+  return {
+    ...item,
+    servings,
+    quantity: base && (servings === 1 ? base : `${formatDecimal(servings)} × ${base}`),
+    calories: Math.round(item.calories * ratio),
+    protein_g: Math.round(item.protein_g * ratio * 10) / 10,
+    carbs_g: Math.round(item.carbs_g * ratio * 10) / 10,
+    fat_g: Math.round(item.fat_g * ratio * 10) / 10,
+  };
+}
+
+/** Search packaged foods or scan a barcode; a pick becomes an item with its label numbers. No Claude involved. */
+function FoodFinder({ onAdd }: { onAdd: (item: FoodItem) => void }) {
+  const { report, notify } = useApp();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<FoodMatch[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return setResults(null);
+    let current = true;
+    const timer = setTimeout(() => {
+      setSearching(true);
+      api
+        .searchFoods(q)
+        .then((found) => current && setResults(found.results))
+        .catch(report)
+        .finally(() => current && setSearching(false));
+    }, 400);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [query, report]);
+
+  const add = (match: FoodMatch) => {
+    onAdd(itemFromMatch(match));
+    setQuery('');
+    setResults(null);
+    notify(`Added ${match.source.product}`);
+  };
+
+  const onCode = async (code: string) => {
+    setScanning(false);
+    try {
+      const { result } = await api.barcode(code);
+      if (result) add(result);
+      else notify(`No label data for barcode ${code}. Add it by hand.`);
+    } catch (error) {
+      report(error);
+    }
+  };
+
+  return (
+    <div className="food-finder">
+      <div className="finder-row">
+        <input type="search" value={query} placeholder="Search packaged foods" aria-label="Search packaged foods" onChange={(e) => setQuery(e.target.value)} />
+        <button type="button" className="button" onClick={() => setScanning(true)}>
+          <svg viewBox="0 0 24 24" aria-hidden className="barcode-icon">
+            <path d="M4 6v12M7 6v12M10 6v12M14 6v12M16 6v12M20 6v12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          Scan
+        </button>
+      </div>
+      {results && (
+        <div className="finder-results">
+          {searching && !results.length && <p className="empty">Searching…</p>}
+          {!searching && !results.length && <p className="empty">No products with label data. Add it by hand below.</p>}
+          {results.map((match) => (
+            <button type="button" className="finder-result" key={`${match.source.db}:${match.source.id}`} onClick={() => add(match)}>
+              <span className="finder-name">{match.source.product}</span>
+              <span className="finder-meta">
+                {match.serving} · {formatNumber(match.per_serving.calories)} kcal · P {formatNumber(match.per_serving.protein_g)} · C{' '}
+                {formatNumber(match.per_serving.carbs_g)} · F {formatNumber(match.per_serving.fat_g)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {scanning && (
+        <Suspense
+          fallback={
+            <div className="scanner">
+              <p className="scanner-message">Loading the scanner…</p>
+            </div>
+          }
+        >
+          <Scanner onCode={onCode} onClose={() => setScanning(false)} />
+        </Suspense>
+      )}
+    </div>
+  );
+}
 
 export function MealSheet({ entry, date: initialDate, defaultTime, onClose, onSaved }: SheetProps<Meal>) {
   const [description, setDescription] = useState(entry?.description ?? '');
@@ -150,17 +264,28 @@ export function MealSheet({ entry, date: initialDate, defaultTime, onClose, onSa
         <div className="field">
           <span>Foods</span>
         </div>
+        <FoodFinder onAdd={(item) => setItems([...items.filter((i) => i.name.trim() || i.calories), item])} />
         {items.map((item, index) => (
           <div className="subcard" key={index}>
             <div className="subcard-head">
-              <input value={item.name} placeholder="Food" aria-label="Food" onChange={(e) => setItem(index, { name: e.target.value })} />
-              <input
-                value={item.quantity ?? ''}
-                placeholder="Amount"
-                aria-label="Amount"
-                style={{ maxWidth: '7rem' }}
-                onChange={(e) => setItem(index, { quantity: e.target.value })}
-              />
+              {item.source ? (
+                // A product from its label: shown in full rather than squeezed into inputs.
+                <div className="label-item">
+                  <strong>{item.name}</strong>
+                  {item.quantity && <span>{item.quantity}</span>}
+                </div>
+              ) : (
+                <>
+                  <input value={item.name} placeholder="Food" aria-label="Food" onChange={(e) => setItem(index, { name: e.target.value })} />
+                  <input
+                    value={item.quantity ?? ''}
+                    placeholder="Amount"
+                    aria-label="Amount"
+                    style={{ maxWidth: '7rem' }}
+                    onChange={(e) => setItem(index, { quantity: e.target.value })}
+                  />
+                </>
+              )}
               {items.length > 1 && (
                 <button type="button" className="remove" aria-label="Remove food" onClick={() => setItems(items.filter((_, i) => i !== index))}>
                   ×
@@ -178,9 +303,37 @@ export function MealSheet({ entry, date: initialDate, defaultTime, onClose, onSa
               ).map(([key, label]) => (
                 <label className="mini" key={key}>
                   <span>{label}</span>
-                  <NumberField value={item[key] || undefined} placeholder="0" onChange={(value) => setItem(index, { [key]: value ?? 0 })} />
+                  <NumberField
+                    value={item[key] || undefined}
+                    placeholder="0"
+                    // Typing over label numbers makes them your own: drop the source (and the brand, so saving
+                    // doesn't look the label up again).
+                    onChange={(value) => setItem(index, { [key]: value ?? 0, ...(item.source ? { source: undefined, brand: undefined } : {}) })}
+                  />
                 </label>
               ))}
+            </div>
+            <div className="item-source">
+              {item.source ? (
+                <>
+                  <span className="chip label" title={item.source.product}>
+                    ✓ Label · {SOURCE_NAMES[item.source.db]}
+                  </span>
+                  <span className="stepper" role="group" aria-label="Servings">
+                    <button type="button" aria-label="Fewer servings" disabled={(item.servings ?? 1) <= 0.5} onClick={() => setItems(items.map((it, i) => (i === index ? withServings(it, (it.servings ?? 1) - 0.5) : it)))}>
+                      −
+                    </button>
+                    <span>
+                      {formatDecimal(item.servings ?? 1)} serving{(item.servings ?? 1) === 1 ? '' : 's'}
+                    </span>
+                    <button type="button" aria-label="More servings" onClick={() => setItems(items.map((it, i) => (i === index ? withServings(it, (it.servings ?? 1) + 0.5) : it)))}>
+                      +
+                    </button>
+                  </span>
+                </>
+              ) : (
+                item.name.trim() && <span className="chip estimate">Estimate</span>
+              )}
             </div>
           </div>
         ))}

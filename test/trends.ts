@@ -15,9 +15,9 @@ const meal = (date: string, calories: number, protein_g = 150) => ({
 });
 
 let passed = 0;
-function check(name: string, fn: () => void) {
+async function check(name: string, fn: () => void | Promise<void>) {
   try {
-    fn();
+    await fn();
     passed++;
     console.log(`  ✓ ${name}`);
   } catch (error) {
@@ -28,7 +28,7 @@ function check(name: string, fn: () => void) {
 
 console.log('Trends');
 
-check('exercise names group by a loose key and a few aliases', () => {
+await check('exercise names group by a loose key and a few aliases', () => {
   assert.equal(exerciseKey('Pull-ups'), 'pull up');
   assert.equal(exerciseKey('pullups'), 'pull up');
   assert.equal(exerciseKey('Flat Bench'), 'bench press');
@@ -39,7 +39,7 @@ check('exercise names group by a loose key and a few aliases', () => {
   assert.equal(estimateOneRepMax(150, 10), 200);
 });
 
-check('weeks run Sunday to Saturday and end with the current, in-progress week', () => {
+await check('weeks run Sunday to Saturday and end with the current, in-progress week', () => {
   const db = new FitnessDb(':memory:', 'America/Chicago');
   const t = trends(db, 4, db.getProfile(), TODAY);
   assert.equal(t.range.start, '2026-10-11');
@@ -58,15 +58,15 @@ check('weeks run Sunday to Saturday and end with the current, in-progress week',
   assert.deepEqual(t.lifts, []);
 });
 
-check('maintenance = average intake minus the energy in the weight trend', () => {
+await check('maintenance = average intake minus the energy in the weight trend', async () => {
   const db = new FitnessDb(':memory:', 'America/Chicago');
   db.updateProfile({ weight_unit: 'lb', target_weight: 170 });
   // 20 days at 2,000 kcal while losing 0.1 lb a day: 2,000 + 0.1 * 3,500 = 2,350.
   const windowStart = addDays(YESTERDAY, -27);
-  for (let i = 3; i < 23; i++) service.logMeal(db, meal(addDays(windowStart, i), 2000));
+  for (let i = 3; i < 23; i++) await service.logMeal(db, meal(addDays(windowStart, i), 2000));
   for (let i = 0; i < 28; i += 3) service.logWeight(db, { weight: 190 - 0.1 * i, date: addDays(windowStart, i), time: '07:00' });
   // Today's meal is in progress and must not count.
-  service.logMeal(db, meal(TODAY, 500));
+  await service.logMeal(db, meal(TODAY, 500));
 
   const t = trends(db, 4, db.getProfile(), TODAY);
   assert.equal(t.maintenance.window.start, windowStart);
@@ -82,9 +82,9 @@ check('maintenance = average intake minus the energy in the weight trend', () =>
   assert.equal(t.nutrition.avg_calories, 2000);
 });
 
-check('maintenance waits for enough data and says how much it has', () => {
+await check('maintenance waits for enough data and says how much it has', async () => {
   const db = new FitnessDb(':memory:', 'America/Chicago');
-  for (let i = 1; i <= 5; i++) service.logMeal(db, meal(addDays(TODAY, -i), 2100));
+  for (let i = 1; i <= 5; i++) await service.logMeal(db, meal(addDays(TODAY, -i), 2100));
   service.logWeight(db, { weight: 180, date: addDays(TODAY, -2), time: '07:00' });
   const m = trends(db, 4, db.getProfile(), TODAY).maintenance;
   assert.equal(m.estimate, undefined);
@@ -93,7 +93,7 @@ check('maintenance waits for enough data and says how much it has', () => {
   assert.deepEqual(m.requirements, { logged_days: 14, weigh_ins: 4, weigh_in_span_days: 14 });
 });
 
-check('weight: first weigh-in of the day, 7-day average, unit conversion, rate and distance to target', () => {
+await check('weight: first weigh-in of the day, 7-day average, unit conversion, rate and distance to target', () => {
   const db = new FitnessDb(':memory:', 'America/Chicago');
   db.updateProfile({ weight_unit: 'lb', target_weight: 175 });
   service.logWeight(db, { weight: 182, date: '2026-10-20', time: '07:00' });
@@ -113,11 +113,11 @@ check('weight: first weigh-in of the day, 7-day average, unit conversion, rate a
   assert.ok(t.weight!.change_per_week! < 0);
 });
 
-check('weekly nutrition, goal adherence and workouts per week', () => {
+await check('weekly nutrition, goal adherence and workouts per week', async () => {
   const db = new FitnessDb(':memory:', 'America/Chicago');
   db.updateProfile({ daily_calories: 2000, daily_protein_g: 150, workouts_per_week: 2 });
-  service.logMeal(db, meal('2026-10-25', 2100, 160)); // within 10%, protein met
-  service.logMeal(db, meal('2026-10-26', 2500, 120)); // over, protein missed
+  await service.logMeal(db, meal('2026-10-25', 2100, 160)); // within 10%, protein met
+  await service.logMeal(db, meal('2026-10-26', 2500, 120)); // over, protein missed
   const workout = (date: string) => service.logWorkout(db, { description: 'lift', type: 'strength', date, time: '18:00' });
   workout('2026-10-25');
   workout('2026-10-27');
@@ -137,7 +137,7 @@ check('weekly nutrition, goal adherence and workouts per week', () => {
   assert.equal(t.training.avg_per_completed_week, 1);
 });
 
-check('lifts: best estimated 1RM per day, grouped across spellings and units', () => {
+await check('lifts: best estimated 1RM per day, grouped across spellings and units', () => {
   const db = new FitnessDb(':memory:', 'America/Chicago');
   const lift = (date: string, name: string, sets: { reps?: number; weight?: number; unit?: 'lb' | 'kg' }[]) =>
     service.logWorkout(db, { description: 'lift', type: 'strength', date, time: '18:00', exercises: [{ name, sets }] });

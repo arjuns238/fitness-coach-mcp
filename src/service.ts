@@ -10,10 +10,11 @@ import {
   type WeightInput,
   type WorkoutInput,
 } from './schemas.ts';
-import { dayDetail, dayTotals, rangeSummary } from './summary.ts';
+import { findBranded, lookupBarcode, searchFoods } from './foods.ts';
+import { dayDetail, dayTotals, rangeSummary, round1 } from './summary.ts';
 import { addDays, daysBetween, isValidTimeZone, nowLocal, resolveDate } from './time.ts';
 import { trends } from './trends.ts';
-import type { EntryKind, Exercise, Profile } from './types.ts';
+import type { EntryKind, Exercise, FoodItem, Profile } from './types.ts';
 
 const MEAL_TIMES: Record<string, string> = { breakfast: '08:00', lunch: '12:30', dinner: '19:00', snack: '15:00' };
 
@@ -39,16 +40,43 @@ function withDefaultUnits(exercises: Exercise[], profile: Profile): Exercise[] {
   }));
 }
 
-export function logMeal(db: FitnessDb, { description, items, meal_type, date, time, notes }: MealInput) {
+/**
+ * Branded items get their product's label numbers (per serving, times servings) in place of the estimate. Items
+ * that already carry a source keep it, so resending a meal never repeats lookups or undoes an edit; when nothing
+ * matches, the estimate stands.
+ */
+async function withLabelData(items: FoodItem[]): Promise<FoodItem[]> {
+  return Promise.all(
+    items.map(async (item) => {
+      if (!item.brand || item.source) return item;
+      const match = await findBranded(item.brand, item.name);
+      if (!match) return item;
+      const servings = item.servings ?? 1;
+      const label = match.per_serving;
+      return {
+        ...item,
+        servings,
+        quantity: item.quantity ?? (servings === 1 ? match.serving : `${servings} × ${match.serving}`),
+        calories: Math.round(label.calories * servings),
+        protein_g: round1(label.protein_g * servings),
+        carbs_g: round1(label.carbs_g * servings),
+        fat_g: round1(label.fat_g * servings),
+        source: match.source,
+      };
+    }),
+  );
+}
+
+export async function logMeal(db: FitnessDb, { description, items, meal_type, date, time, notes }: MealInput) {
   const profile = db.getProfile();
   const when = resolveWhen(profile, date, time, meal_type ? MEAL_TIMES[meal_type] : undefined);
-  const logged = db.addMeal({ ...when, meal_type: meal_type ?? null, description, items, notes: notes ?? null });
+  const logged = db.addMeal({ ...when, meal_type: meal_type ?? null, description, items: await withLabelData(items), notes: notes ?? null });
   return { logged, day: dayTotals(db, when.local_date, profile) };
 }
 
-export function updateMeal(db: FitnessDb, id: number, { date, time, ...rest }: Partial<MealInput>) {
+export async function updateMeal(db: FitnessDb, id: number, { date, time, items, ...rest }: Partial<MealInput>) {
   const profile = db.getProfile();
-  const updated = db.updateMeal(id, { ...rest, ...changedWhen(profile, date, time) });
+  const updated = db.updateMeal(id, { ...rest, ...(items ? { items: await withLabelData(items) } : {}), ...changedWhen(profile, date, time) });
   if (!updated) throw new NotFoundError(`No meal with id ${id}.`);
   return { updated, day: dayTotals(db, updated.local_date, profile) };
 }
@@ -138,4 +166,16 @@ export function updateProfile(db: FitnessDb, patch: ProfilePatchInput) {
 
 export function recentMeals(db: FitnessDb, limit = 20) {
   return db.recentMeals(limit);
+}
+
+/** The dashboard's food search and barcode scanner. */
+export async function findFoods(query: string) {
+  const q = query.trim();
+  if (q.length < 2 || q.length > 100) throw new InputError('Search for 2 to 100 characters.');
+  return { results: await searchFoods(q) };
+}
+
+export async function findBarcode(code: string) {
+  if (!/^\d{6,14}$/.test(code)) throw new InputError('A barcode is 6 to 14 digits.');
+  return { result: (await lookupBarcode(code)) ?? null };
 }

@@ -3,8 +3,8 @@
 // and the 2026-07-28 flow via the official client.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { request } from 'node:http';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
@@ -18,8 +18,43 @@ mkdirSync(join(dir, 'web/assets'), { recursive: true });
 writeFileSync(join(dir, 'web/index.html'), '<!doctype html><title>shell</title>');
 writeFileSync(join(dir, 'web/assets/app-abc123.js'), 'console.log(1)');
 
+// Stand-ins for USDA FoodData Central and Open Food Facts, answering with saved real responses.
+const FOODS_PORT = 3918;
+const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
+const fdcQueries: string[] = [];
+const foodsStub = createHttpServer(async (req, res) => {
+  const json = (status: number, body: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+  if (req.url === '/fdc/foods/search' && req.method === 'POST') {
+    if (req.headers['x-api-key'] !== 'test-fdc-key') return json(403, { error: 'key must arrive in the X-Api-Key header' });
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const { query } = JSON.parse(body) as { query: string };
+    fdcQueries.push(query);
+    if (/ratelimited/i.test(query)) return json(429, { error: 'OVER_RATE_LIMIT' });
+    return json(200, /quest|888849000005/i.test(query) ? JSON.parse(fixture('fdc-search-quest.json')) : { foods: [] });
+  }
+  const off = /^\/off\/api\/v2\/product\/(\d+)/.exec(req.url ?? '');
+  if (off) {
+    if (off[1] !== '0000000000017') return json(200, { status: 0 });
+    const { product } = JSON.parse(fixture('off-product-quest.json'));
+    return json(200, { status: 1, product: { ...product, product_name: 'Oat Bar', brands: 'Stubco' } });
+  }
+  json(200, { products: [] });
+});
+await new Promise<void>((resolve) => foodsStub.listen(FOODS_PORT, '127.0.0.1', resolve));
+
 const server = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', 'src/index.ts'], {
-  env: { ...process.env, PORT: String(PORT), MCP_API_KEY: KEY, DB_PATH: join(dir, 'test.db'), WEB_DIR: join(dir, 'web'), USER_TIMEZONE: 'America/Chicago' },
+  env: {
+    ...process.env,
+    PORT: String(PORT),
+    MCP_API_KEY: KEY,
+    DB_PATH: join(dir, 'test.db'),
+    WEB_DIR: join(dir, 'web'),
+    USER_TIMEZONE: 'America/Chicago',
+    FDC_API_KEY: 'test-fdc-key',
+    FDC_BASE_URL: `http://127.0.0.1:${FOODS_PORT}/fdc`,
+    OFF_BASE_URL: `http://127.0.0.1:${FOODS_PORT}/off`,
+  },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 await new Promise<void>((resolve, reject) => {
@@ -405,6 +440,57 @@ try {
     assert.equal(viaMcp.data.days, undefined);
     assert.equal(viaMcp.data.weeks.length, 4);
   });
+  console.log('Label data');
+  const bar = (extra: object) => ({ name: 'cookies and cream protein bar', calories: 200, protein_g: 20, carbs_g: 20, fat_g: 8, ...extra });
+  await check('branded items get their label numbers; unknown brands and plain foods keep the estimate', async () => {
+    const { status, data } = await api('POST', '/meals', {
+      description: 'two quest bars, a barebells bar and a banana',
+      date: today,
+      items: [bar({ brand: 'Quest', servings: 2 }), bar({ brand: 'Barebells' }), { name: 'banana', calories: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.4 }],
+    });
+    assert.equal(status, 200);
+    const [quest, barebells, banana] = data.logged.items;
+    assert.deepEqual(quest.source, { db: 'usda', id: '2669747', product: 'Quest Cookies & Cream Protein Bar' });
+    assert.deepEqual([quest.calories, quest.protein_g, quest.quantity], [380, 42, '2 × 1 bar (60 g)']);
+    assert.equal(barebells.source, undefined);
+    assert.equal(barebells.calories, 200);
+    assert.deepEqual(banana, { name: 'banana', calories: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.4 });
+    assert.equal(data.logged.calories, 685);
+
+    // Resending items that already carry a source (an edit, or Claude's update_meal) doesn't look them up again,
+    // and a hand-edited label item keeps its new numbers.
+    const before = fdcQueries.length;
+    const items = data.logged.items.map((item: { calories: number }, i: number) => (i === 0 ? { ...item, calories: 400 } : item));
+    const edited = await api('PATCH', `/meals/${data.logged.id}`, { items });
+    assert.equal(edited.data.updated.items[0].calories, 400);
+    // No new lookups: the Quest item carries its source, and Barebells' "no match" is cached for the day.
+    assert.equal(fdcQueries.length, before);
+    assert.equal((await api('DELETE', `/meals/${data.logged.id}`)).status, 200);
+  });
+  await check('a rate-limited lookup still logs, with the estimate', async () => {
+    const { status, data } = await api('POST', '/meals', { description: 'x', date: today, items: [bar({ brand: 'RateLimited' })] });
+    assert.equal(status, 200);
+    assert.equal(data.logged.items[0].source, undefined);
+    assert.equal((await api('DELETE', `/meals/${data.logged.id}`)).status, 200);
+  });
+  await check('log_meal over MCP uses label data too', async () => {
+    const { data } = await callLegacy('log_meal', { description: 'quest bar', items: [bar({ brand: 'Quest' })] });
+    assert.equal(data.logged.items[0].source.db, 'usda');
+    assert.equal(data.logged.items[0].calories, 190);
+    await callLegacy('delete_entry', { kind: 'meal', id: data.logged.id });
+  });
+  await check('food search and barcode lookup for the dashboard', async () => {
+    const search = await api('GET', '/foods/search?q=quest%20cookies%20cream');
+    assert.equal(search.data.results[0].source.product, 'Quest Cookies & Cream Protein Bar');
+    assert.equal(search.data.results[0].per_serving.calories, 190);
+    assert.equal((await api('GET', '/foods/search?q=x')).status, 400);
+    assert.equal((await api('GET', '/foods/barcode/888849000005')).data.result.source.db, 'usda');
+    const fromOff = (await api('GET', '/foods/barcode/0000000000017')).data.result;
+    assert.deepEqual([fromOff.source.db, fromOff.source.product, fromOff.per_serving.calories], ['off', 'Stubco Oat Bar', 190]);
+    assert.equal((await api('GET', '/foods/barcode/0000000000024')).data.result, null);
+    assert.equal((await api('GET', '/foods/barcode/abc')).status, 400);
+  });
+
   await check('logout clears the cookie', async () => {
     const { headers } = await api('POST', '/logout', {});
     assert.match(headers.get('set-cookie')!, /Max-Age=0/);
@@ -430,6 +516,9 @@ try {
       assert.match(res.headers.get('content-security-policy')!, /frame-ancestors 'none'/);
       assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
       assert.equal(res.headers.get('x-frame-options'), 'DENY');
+      // The scanner needs exactly these two exceptions, and no more.
+      assert.match(res.headers.get('content-security-policy')!, /script-src 'self' 'wasm-unsafe-eval';/);
+      assert.equal(res.headers.get('permissions-policy'), 'camera=(self), microphone=(), geolocation=()');
       assert.equal(res.headers.get('strict-transport-security'), null); // only behind HTTPS
     }
     const behindTls = await fetch(`${BASE}/`, { headers: { 'x-forwarded-proto': 'https' } });
@@ -527,5 +616,6 @@ try {
   console.log(`\n${passed} checks passed`);
 } finally {
   server.kill();
+  foodsStub.close();
   rmSync(dir, { recursive: true, force: true });
 }
