@@ -66,12 +66,17 @@ export function App() {
     [auth.required, notify],
   );
 
+  useEffect(() => {
+    document.title = auth.status === 'in' ? `${TITLES[route.tab]} · Hulk` : 'Hulk';
+  }, [route.tab, auth.status]);
+
   if (auth.status === 'checking') return <p className="loading">Loading…</p>;
   if (auth.status === 'out') return <Login onSignedIn={() => setAuth((a) => ({ ...a, status: 'in' }))} />;
 
   return (
     <AppContext.Provider value={context}>
       <main className="app">
+        <BrandBar />
         {/* Keyed by screen (and day), so switching tabs replays the entrance; a range or month change doesn't. */}
         <div className="view" key={route.tab === 'day' ? `day:${route.date ?? 'today'}` : route.tab}>
           {route.tab === 'day' && <DayView date={route.date} />}
@@ -87,6 +92,30 @@ export function App() {
         </div>
       )}
     </AppContext.Provider>
+  );
+}
+
+const TITLES: Record<Route['tab'], string> = { day: 'Today', history: 'History', trends: 'Trends', goals: 'Goals' };
+
+/** The app's name on every screen. It sits outside the animated view, so it stays put when the screen changes. */
+function BrandBar() {
+  return (
+    <div className="brand-bar">
+      <a className="brand" href="#/" aria-label="Hulk, go to today">
+        <AppMark />
+        <span>Hulk</span>
+      </a>
+    </div>
+  );
+}
+
+/** The home-screen icon in miniature: a three-quarter ring on the accent square. */
+export function AppMark() {
+  return (
+    <svg className="app-mark" viewBox="0 0 24 24" aria-hidden>
+      <rect width="24" height="24" rx="6" />
+      <path d="M12 4.8a7.2 7.2 0 1 1-7.2 7.2" fill="none" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
   );
 }
 

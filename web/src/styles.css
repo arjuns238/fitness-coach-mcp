@@ -82,6 +82,39 @@ a {
   padding: calc(env(safe-area-inset-top) + 12px) 16px calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 24px);
 }
 
+/* ---------- Brand bar ---------- */
+
+.brand-bar {
+  display: flex;
+  align-items: center;
+  margin: 0 0 14px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.app-mark {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+
+.app-mark rect {
+  fill: var(--accent);
+}
+
+/* White in both themes, like the home-screen icon. */
+.app-mark path {
+  stroke: #fff;
+}
+
 /* ---------- Header ---------- */
 
 .page-header {
