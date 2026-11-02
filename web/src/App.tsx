@@ -161,7 +161,7 @@ function Login({ onSignedIn }: { onSignedIn: () => void }) {
     <main className="app login">
       <form onSubmit={submit}>
         <img src="/apple-touch-icon.png" alt="" />
-        <h1 style={{ margin: '0 0 4px' }}>Fitness Coach</h1>
+        <h1 style={{ margin: '0 0 4px' }}>Hulk</h1>
         <p className="empty" style={{ marginBottom: 20 }}>
           Sign in with your server's API key. You'll stay signed in on this device for 90 days.
         </p>

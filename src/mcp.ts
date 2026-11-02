@@ -15,7 +15,7 @@ import {
 } from './schemas.ts';
 import * as service from './service.ts';
 
-const INSTRUCTIONS = `Personal nutrition and training log for one user, who you are coaching.
+const INSTRUCTIONS = `Hulk: a personal nutrition and training log for one user, who you are coaching. "Hulk" is what they call it.
 They usually log by voice, so messages are casual and imprecise.
 - Log as soon as the user mentions food, a workout or a weigh-in, using your best estimate. Save first; don't wait for answers.
 - One message can contain several things ("eggs for breakfast, then a 3 mile run"): make one log call per item.
@@ -34,7 +34,7 @@ They usually log by voice, so messages are casual and imprecise.
 const json = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data) }] });
 
 export function createServer(db: FitnessDb): McpServer {
-  const server = new McpServer({ name: 'fitness-coach', version: '1.3.0' }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: 'hulk', version: '1.4.0' }, { instructions: INSTRUCTIONS });
 
   server.registerTool(
     'log_meal',

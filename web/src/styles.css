@@ -123,20 +123,56 @@ a {
   flex: none;
 }
 
-.icon-button[aria-disabled='true'] {
+.icon-button:disabled {
   opacity: 0.35;
-  pointer-events: none;
+  cursor: default;
 }
 
-.date-picker {
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* The date title doubles as the date picker: a transparent native input covers it, clipped to the title. */
+.title-picker {
   position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
 }
 
-.date-picker input {
+.title-picker:active {
+  opacity: 0.6;
+}
+
+.title-picker:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.title-picker h1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.title-picker .chevron {
+  width: 22px;
+  height: 22px;
+  color: var(--text-3);
+  flex: none;
+}
+
+.title-picker input {
   position: absolute;
   inset: 0;
-  opacity: 0;
   width: 100%;
+  height: 100%;
+  min-width: 0;
+  opacity: 0;
   cursor: pointer;
 }
 

@@ -1,6 +1,6 @@
 import { api, type MonthSummary, type SummaryDay } from './api.ts';
 import { formatMonth, shiftMonth, todayFromNow } from './format.ts';
-import { useAsync } from './ui.tsx';
+import { NavArrow, useAsync } from './ui.tsx';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -24,16 +24,19 @@ export function HistoryView({ month = browserMonth() }: { month?: string }) {
   return (
     <>
       <header className="page-header">
-        <a className="icon-button" href={`#/history/${shiftMonth(month, -1)}`} aria-label="Previous month">
-          ‹
-        </a>
         <div className="titles">
           <h1>{formatMonth(month)}</h1>
           <div className="subtitle">History</div>
         </div>
-        <a className="icon-button" href={`#/history/${shiftMonth(month, 1)}`} aria-label="Next month" aria-disabled={month >= browserMonth()}>
-          ›
-        </a>
+        <nav className="header-nav" aria-label="Change month">
+          {month < browserMonth() && (
+            <a className="button small" href="#/history">
+              This month
+            </a>
+          )}
+          <NavArrow direction="prev" href={`#/history/${shiftMonth(month, -1)}`} label="Previous month" />
+          <NavArrow direction="next" href={`#/history/${shiftMonth(month, 1)}`} label="Next month" disabled={month >= browserMonth()} />
+        </nav>
       </header>
       {data ? <Month key={data.range.start} data={data} /> : <p className="loading">Loading…</p>}
     </>

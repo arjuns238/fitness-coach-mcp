@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api, type Meal, type WeighIn, type Workout } from './api.ts';
-import { addDays, formatDay, formatNumber, formatTime, setSummary, timeFromNow, todayFromNow } from './format.ts';
+import { addDays, daysBetween, formatDay, formatNumber, formatTime, setSummary, timeFromNow, todayFromNow } from './format.ts';
 import { MealSheet, WeightSheet, WorkoutSheet } from './sheets.tsx';
-import { Meter, useAsync } from './ui.tsx';
+import { Meter, NavArrow, useAsync } from './ui.tsx';
+
+const daysAgo = (n: number) => (n === 1 ? 'Yesterday' : n > 1 ? `${n} days ago` : `In ${-n} days`);
 
 type Editing = { kind: 'meal'; entry?: Meal } | { kind: 'workout'; entry?: Workout } | { kind: 'weight'; entry?: WeighIn } | null;
 
@@ -36,23 +38,40 @@ export function DayView({ date }: { date?: string }) {
   return (
     <>
       <header className="page-header">
-        <a className="icon-button" href={`#/day/${addDays(day.date, -1)}`} aria-label="Previous day">
-          ‹
-        </a>
-        <div className="titles">
-          <h1>{isToday ? 'Today' : formatDay(day.date)}</h1>
-          <div className="subtitle">{isToday ? formatDay(day.date) : <a href="#/">Back to today</a>}</div>
-        </div>
-        <span className="icon-button date-picker">
-          <svg viewBox="0 0 24 24" aria-hidden>
-            <rect x="4" y="5" width="16" height="15" rx="3" fill="none" stroke="currentColor" strokeWidth="2" />
-            <path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          <input type="date" max={today} value={day.date} aria-label="Pick a date" onChange={(e) => e.target.value && (location.hash = `#/day/${e.target.value}`)} />
-        </span>
-        <a className="icon-button" href={`#/day/${addDays(day.date, 1)}`} aria-label="Next day" aria-disabled={isToday}>
-          ›
-        </a>
+        {/* The whole title opens the date picker; the arrows live apart on the right so the two can't be mixed up. */}
+        <label className="titles title-picker">
+          <h1>
+            {isToday ? 'Today' : formatDay(day.date)}
+            <svg className="chevron" viewBox="0 0 24 24" aria-hidden>
+              <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </h1>
+          <div className="subtitle">{isToday ? formatDay(day.date) : daysAgo(daysBetween(day.date, today))}</div>
+          <input
+            type="date"
+            max={today}
+            value={day.date}
+            aria-label="Pick a date"
+            onClick={(e) => {
+              // Desktop browsers only open the calendar from its own icon; open it from anywhere on the title.
+              try {
+                e.currentTarget.showPicker();
+              } catch {
+                // Not allowed here (e.g. already open); the native control still works.
+              }
+            }}
+            onChange={(e) => e.target.value && (location.hash = e.target.value === today ? '#/' : `#/day/${e.target.value}`)}
+          />
+        </label>
+        <nav className="header-nav" aria-label="Change day">
+          {!isToday && (
+            <a className="button small" href="#/">
+              Today
+            </a>
+          )}
+          <NavArrow direction="prev" href={`#/day/${addDays(day.date, -1)}`} label="Previous day" />
+          <NavArrow direction="next" href={addDays(day.date, 1) === today ? '#/' : `#/day/${addDays(day.date, 1)}`} label="Next day" disabled={isToday} />
+        </nav>
       </header>
 
       <section className="card">

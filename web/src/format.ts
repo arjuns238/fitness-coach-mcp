@@ -1,4 +1,4 @@
-export { addDays } from '../../src/time.ts';
+export { addDays, daysBetween } from '../../src/time.ts';
 
 const utc = (date: string) => new Date(`${date}T00:00:00Z`);
 

@@ -117,6 +117,27 @@ export function Meter({
   );
 }
 
+/**
+ * A previous/next arrow. When there's nowhere to go it's a disabled button, which swallows the tap; a link made
+ * click-through with pointer-events would hand the tap to whatever sits underneath.
+ */
+export function NavArrow({ href, label, direction, disabled = false }: { href: string; label: string; direction: 'prev' | 'next'; disabled?: boolean }) {
+  const icon = (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <path d={direction === 'prev' ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+  return disabled ? (
+    <button type="button" className="icon-button" aria-label={label} disabled>
+      {icon}
+    </button>
+  ) : (
+    <a className="icon-button" href={href} aria-label={label}>
+      {icon}
+    </a>
+  );
+}
+
 /** Bottom sheet. Closes on Escape or the Cancel button, not on backdrop taps, so a stray tap can't drop edits. */
 export function Sheet({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   useEffect(() => {

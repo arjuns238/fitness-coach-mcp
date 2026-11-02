@@ -1,4 +1,6 @@
-# fitness-coach MCP server
+# Hulk
+
+A voice-first meal and workout log: an MCP server Claude logs into while you talk, plus a dashboard to review and edit it. (The repo, Azure resources and URL keep the original `fitness-coach` name.)
 
 A meal and workout log that Claude reads and writes for you. Say "had a burrito bowl and a 3 mile run" in the Claude app and Claude logs both with its best macro estimate, tells you where the day stands, and asks a question or two when a detail would change the numbers (portion, oil, missing weights). Your answers update the same entries. Ask "how was my week?" and it pulls the numbers before coaching you.
 

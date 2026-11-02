@@ -91,7 +91,7 @@ const server = createHttpServer((req, res) => {
 });
 
 server.listen(config.port, config.host, () => {
-  console.log(`fitness-coach MCP server on http://${config.host}:${config.port}/mcp (db: ${config.dbPath}, auth: ${config.apiKey ? 'on' : 'off'})`);
+  console.log(`Hulk MCP server on http://${config.host}:${config.port}/mcp (db: ${config.dbPath}, auth: ${config.apiKey ? 'on' : 'off'})`);
   console.log(`dashboard on http://${config.host}:${config.port}/`);
 });
 

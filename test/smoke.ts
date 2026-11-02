@@ -112,7 +112,7 @@ try {
       );
       assert.equal(status, 200, JSON.stringify(payload));
       assert.equal(payload.result.protocolVersion, protocolVersion);
-      assert.equal(payload.result.serverInfo.name, 'fitness-coach');
+      assert.equal(payload.result.serverInfo.name, 'hulk');
       assert.match(payload.result.instructions, /voice/);
     });
   }
