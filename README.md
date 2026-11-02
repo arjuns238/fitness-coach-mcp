@@ -71,21 +71,40 @@ Use the full path from `which node`, since Claude Desktop doesn't load your shel
 
 ## Deploy
 
-Any host that gives you HTTPS and persistent storage works. The `Dockerfile` builds the dashboard, serves everything on port 8080, and stores the database at `/data/fitness.db`, so mount persistent storage at `/data`.
+### Azure Container Apps (what `deploy/azure.sh` does)
+
+Scales to zero when idle, so it costs cents a month. The first request after a quiet spell waits a few seconds for the container to start.
+
+- **Storage:** the database is a SQLite file on the container's own disk, which is wiped whenever the app scales to zero. [Litestream](https://litestream.io) restores it from Blob Storage when a container starts and streams every change back within about a second (`deploy/litestream.yml`).
+- **Backups:** a nightly job saves a plain copy to `snapshots/day-DD.db` in the same Blob container, a rolling month that any SQLite tool can open (`scripts/snapshot.ts`).
+- **Identity:** a managed identity that can pull the image and read and write that one Blob container. There's no storage key anywhere.
+- **API key:** generated on the first run and kept in `~/.config/fitness-coach/api-key`, outside the repo.
+
+```sh
+cp deploy/azure.env.example deploy/azure.env   # names of your resource group, environment, registry, storage account
+./deploy/azure.sh                              # re-run to ship a new version
+```
+
+A redeploy briefly runs the old and new containers side by side, and anything logged in those few seconds can be lost. Don't redeploy mid-conversation.
+
+### Anywhere else
+
+The `Dockerfile` builds the dashboard, serves everything on port 8080, and stores the database at `/data/fitness.db`. Without the Litestream variables it runs the server on its own, so mount persistent storage at `/data`.
 
 Environment:
 
 | Variable | |
 |---|---|
 | `MCP_API_KEY` | Required. Generate with `openssl rand -hex 32` |
-| `ALLOWED_HOSTS` | Your public hostname, e.g. `fitness-coach.fly.dev` (Host-header check) |
+| `ALLOWED_HOSTS` | Your public hostname, e.g. `fitness-coach.example.com` (Host-header check) |
 | `USER_TIMEZONE` | e.g. `America/Chicago`, until you set one with `update_profile` |
+| `LITESTREAM_ACCOUNT`, `LITESTREAM_CONTAINER` | Optional. Azure storage account and Blob container to replicate to |
 
 ## Connect to Claude
 
-1. In claude.ai on desktop: **Customize → Connectors → Add → Custom → Web**.
-2. URL: `https://<your-host>/mcp`.
-3. Don't set up OAuth. Add a request header `Authorization` with value `Bearer <MCP_API_KEY>` (or `X-API-Key: <MCP_API_KEY>`).
+1. In claude.ai: **Customize → Connectors → Add → Add custom connector**. Enter a name and `https://<your-host>/mcp`, then **Continue**.
+2. Under **Authentication**, choose **No sign-in**.
+3. Under **Request headers**, add `Authorization` with the value `Bearer <MCP_API_KEY>`. Claude sends the value exactly as typed, so include `Bearer `. `X-API-Key: <MCP_API_KEY>` works too.
 4. The connector then shows up in the Claude iPhone app. Start a chat, tap the mic and dictate.
 5. Tell Claude your goals once ("I want 2200 calories and 160g protein a day, lifting 4x a week, I'm cutting until March") and it saves them with `update_profile`.
 

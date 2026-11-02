@@ -81,7 +81,8 @@ export class FitnessDb {
     this.defaultTimezone = defaultTimezone;
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
-    this.db.exec('PRAGMA journal_mode = WAL;');
+    // Litestream briefly takes the write lock when it checkpoints; wait for it instead of failing.
+    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
     this.db.exec(SCHEMA);
   }
 

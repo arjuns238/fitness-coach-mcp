@@ -1,0 +1,14 @@
+# Used when LITESTREAM_ACCOUNT and LITESTREAM_CONTAINER are set (see deploy/start.sh). A container's disk is
+# wiped whenever the app scales to zero, so the database is restored from Blob Storage on every start and
+# every change is streamed back within about a second.
+#
+# No account key: Litestream signs in with the app's managed identity (AZURE_CLIENT_ID picks the
+# user-assigned one), which can only read and write this one container.
+dbs:
+  - path: /data/fitness.db
+    restore-if-db-not-exists: true
+    replica:
+      type: abs
+      account-name: ${LITESTREAM_ACCOUNT}
+      bucket: ${LITESTREAM_CONTAINER}
+      path: fitness.db
