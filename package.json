@@ -1,0 +1,34 @@
+{
+  "name": "fitness-coach-mcp",
+  "version": "1.0.0",
+  "description": "Voice-friendly meal & workout log exposed to Claude as a remote MCP connector",
+  "scripts": {
+    "dev": "node --watch --disable-warning=ExperimentalWarning src/index.ts",
+    "start": "node --disable-warning=ExperimentalWarning src/index.ts",
+    "stdio": "node --disable-warning=ExperimentalWarning src/stdio.ts",
+    "typecheck": "tsc",
+    "test": "node --disable-warning=ExperimentalWarning test/smoke.ts"
+  },
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
