@@ -19,7 +19,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.arjuns238.hulk"
+      "package": "com.arjuns238.hulk",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -49,6 +52,21 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "ajj2308",
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "679e0e67-37b5-4c51-866e-c06d397e2dea"
+      }
+    },
+    "runtimeVersion": "exposdk:58.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/679e0e67-37b5-4c51-866e-c06d397e2dea"
     }
   }
 }
