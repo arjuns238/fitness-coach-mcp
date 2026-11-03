@@ -1,11 +1,12 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Stack } from 'expo-router';
+import { router, Stack, useFocusEffect } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { addDays, daysBetween, formatDay, formatNumber, formatTime, setSummary, todayFromNow } from '../../../../web/src/format.ts';
-import { api, type DayDetail, type Meal } from '../../../lib/api.ts';
+import { addDays, daysBetween, formatDay, formatNumber, formatTime, setSummary, timeFromNow, todayFromNow } from '../../../../web/src/format.ts';
+import { api, type DayDetail, type Meal, type WeighIn, type Workout } from '../../../lib/api.ts';
+import { editEntry } from '../../../lib/editing.ts';
 import { useColors } from '../../../lib/theme.ts';
 import { Card, CardHeader, Empty, Meter, Row, tap, useLoad } from '../../../lib/ui.tsx';
 
@@ -17,6 +18,15 @@ export default function Today() {
   const [date, setDate] = useState<string>();
   const [picking, setPicking] = useState(false);
   const { data: day, error, loading, reload } = useLoad(() => api.day(date), [date]);
+
+  // Coming back from an add/edit sheet (or another tab): show the latest. The first focus is the initial load.
+  const focused = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focused.current) void reload();
+      focused.current = true;
+    }, [reload]),
+  );
 
   // Claude may have logged something while the app was in the background.
   useEffect(() => {
@@ -83,15 +93,15 @@ export default function Today() {
                 mode="date"
                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
                 accentColor={c.accent}
-                onChange={(_, picked) => {
-                  if (!picked) return setPicking(false);
+                onDismiss={() => setPicking(false)}
+                onValueChange={(_, picked) => {
                   const iso = `${picked.getFullYear()}-${String(picked.getMonth() + 1).padStart(2, '0')}-${String(picked.getDate()).padStart(2, '0')}`;
                   go(iso);
                 }}
               />
             </Card>
           )}
-          {error && !day ? <Empty>{error}</Empty> : day ? <DayContent day={day} /> : null}
+          {error && !day ? <Empty>{error}</Empty> : day ? <DayContent day={day} isToday={isToday} /> : null}
         </ScrollView>
       </GestureDetector>
     </>
@@ -107,9 +117,14 @@ function HeaderIcon({ name, label, onPress, disabled }: { name: 'calendar' | 'ch
   );
 }
 
-function DayContent({ day }: { day: DayDetail }) {
+function DayContent({ day, isToday }: { day: DayDetail; isToday: boolean }) {
   const c = useColors();
   const { totals, goals } = day;
+  // Opens an add/edit sheet for this day; new entries default to now today, or midday on a past day.
+  const open = (sheet: 'meal' | 'workout' | 'weight', entry?: Meal | Workout | WeighIn) => {
+    editEntry(entry);
+    router.push({ pathname: `/${sheet}`, params: { date: day.date, time: isToday ? timeFromNow(day.now) : '12:00', unit: day.profile.weight_unit } });
+  };
   return (
     <>
       <Card>
@@ -128,10 +143,10 @@ function DayContent({ day }: { day: DayDetail }) {
       </Card>
 
       <Card>
-        <CardHeader title="Meals" action="+ Add" />
+        <CardHeader title="Meals" action="+ Add" onAction={() => open('meal')} />
         {!day.meals.length && <Empty>Nothing logged yet. Tell Claude what you ate, or add it here.</Empty>}
         {day.meals.map((meal, i) => (
-          <Row key={meal.id} first={i === 0}>
+          <Row key={meal.id} first={i === 0} onPress={() => open('meal', meal)}>
             <View style={styles.main}>
               <Text style={[styles.meta, { color: c.text2 }]}>
                 {formatTime(meal.time)}
@@ -154,10 +169,10 @@ function DayContent({ day }: { day: DayDetail }) {
       </Card>
 
       <Card>
-        <CardHeader title="Workouts" action="+ Add" />
+        <CardHeader title="Workouts" action="+ Add" onAction={() => open('workout')} />
         {!day.workouts.length && <Empty>No workout logged.</Empty>}
         {day.workouts.map((workout, i) => (
-          <Row key={workout.id} first={i === 0}>
+          <Row key={workout.id} first={i === 0} onPress={() => open('workout', workout)}>
             <View style={styles.main}>
               <Text style={[styles.meta, { color: c.text2 }]}>
                 {formatTime(workout.time)} · {workout.type[0].toUpperCase() + workout.type.slice(1)}
@@ -180,10 +195,10 @@ function DayContent({ day }: { day: DayDetail }) {
       </Card>
 
       <Card>
-        <CardHeader title="Weight" action="+ Log" />
+        <CardHeader title="Weight" action="+ Log" onAction={() => open('weight')} />
         {!day.weigh_ins.length && <Empty>No weigh-in.</Empty>}
         {day.weigh_ins.map((weighIn, i) => (
-          <Row key={weighIn.id} first={i === 0}>
+          <Row key={weighIn.id} first={i === 0} onPress={() => open('weight', weighIn)}>
             <View style={styles.main}>
               <Text style={[styles.title, { color: c.text }]}>
                 {weighIn.weight} {weighIn.unit}

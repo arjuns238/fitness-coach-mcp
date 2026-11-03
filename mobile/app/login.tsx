@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, StyleSheet, Text } from 'react-native';
+import { Button, Input } from 'tamagui';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthError } from '../lib/api.ts';
 import { useSession } from '../lib/session.tsx';
@@ -34,26 +35,36 @@ export default function Login() {
         <Image source={require('../assets/images/icon.png')} style={styles.icon} />
         <Text style={[styles.title, { color: c.text }]}>Hulk</Text>
         <Text style={[styles.subtitle, { color: c.text2 }]}>Sign in with your server's API key. It's kept in this iPhone's Keychain.</Text>
-        <TextInput
+        <Input
+          size="$5"
           value={key}
           onChangeText={setKey}
           placeholder="API key"
-          placeholderTextColor={c.text3}
+          placeholderTextColor={c.text3 as never}
           secureTextEntry
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="go"
           onSubmitEditing={submit}
-          style={[styles.input, { backgroundColor: c.surface, color: c.text }]}
+          backgroundColor={c.surface}
+          borderWidth={0}
+          color={c.text}
         />
         {error ? <Text style={[styles.error, { color: c.critical }]}>{error}</Text> : null}
-        <Pressable
-          onPress={submit}
+        <Button
+          size="$5"
+          marginTop="$1"
+          backgroundColor={c.accent}
+          color={c.onAccent}
+          fontWeight="600"
           disabled={!key.trim() || busy}
-          style={({ pressed }) => [styles.button, { backgroundColor: c.accent, opacity: !key.trim() ? 0.5 : pressed ? 0.8 : 1 }]}
+          opacity={!key.trim() ? 0.5 : 1}
+          pressStyle={{ opacity: 0.85, backgroundColor: c.accent }}
+          icon={busy ? <ActivityIndicator color={c.onAccent} /> : undefined}
+          onPress={submit}
         >
-          {busy ? <ActivityIndicator color={c.onAccent} /> : <Text style={[styles.buttonText, { color: c.onAccent }]}>Sign in</Text>}
-        </Pressable>
+          {busy ? '' : 'Sign in'}
+        </Button>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -65,8 +76,5 @@ const styles = StyleSheet.create({
   icon: { width: 72, height: 72, borderRadius: 16, marginBottom: 8 },
   title: { fontSize: 34, fontWeight: '700' },
   subtitle: { fontSize: 15, marginBottom: 12 },
-  input: { height: 50, borderRadius: 12, paddingHorizontal: 14, fontSize: 17 },
   error: { fontSize: 15 },
-  button: { height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  buttonText: { fontSize: 17, fontWeight: '600' },
 });

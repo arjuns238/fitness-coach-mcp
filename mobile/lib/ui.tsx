@@ -1,7 +1,9 @@
-// Building blocks shared by the screens: cards, list rows, meters, stat tiles, data loading and haptics.
+// Building blocks shared by the screens, made from Tamagui components: cards, list rows, meters, stat tiles,
+// plus data loading and haptics. Page and card colors follow iOS's grouped-list look (see theme.ts).
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform } from 'react-native';
+import { Button, Card as TamaguiCard, Paragraph, Progress, Separator, SizableText, XStack, YStack, type YStackProps } from 'tamagui';
 import { formatNumber } from '../../web/src/format.ts';
 import { useSession } from './session.tsx';
 import { useColors } from './theme.ts';
@@ -43,73 +45,91 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
   return { data, error, loading, reload };
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Card({ children, ...props }: YStackProps & { children: ReactNode }) {
   const c = useColors();
-  return <View style={[styles.card, { backgroundColor: c.surface }, style]}>{children}</View>;
+  return (
+    <TamaguiCard backgroundColor={c.surface} borderRadius="$6" padding="$4" marginBottom="$3.5" {...props}>
+      {children}
+    </TamaguiCard>
+  );
 }
 
-/** A card's title row, with an optional action on the right (e.g. "Add"). */
+/** A card's title row, with an optional action on the right (e.g. "+ Add"). */
 export function CardHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
   const c = useColors();
   return (
-    <View style={styles.cardHeader}>
-      <Text style={[styles.cardTitle, { color: c.text }]}>{title}</Text>
+    <XStack alignItems="center" justifyContent="space-between" marginBottom="$1.5">
+      <SizableText size="$6" fontWeight="600" color={c.text}>
+        {title}
+      </SizableText>
       {action && (
-        <Pressable
+        <Button
+          size="$2.5"
+          borderRadius="$10"
+          backgroundColor={c.fill}
+          color={c.accentStrong}
+          fontWeight="600"
+          pressStyle={{ scale: 0.96, opacity: 0.8 }}
           onPress={() => {
             tap();
             onAction?.();
           }}
-          hitSlop={10}
-          style={({ pressed }) => [styles.pill, { backgroundColor: c.fill, opacity: pressed ? 0.6 : 1 }]}
         >
-          <Text style={[styles.pillText, { color: c.accentStrong }]}>{action}</Text>
-        </Pressable>
+          {action}
+        </Button>
       )}
-    </View>
+    </XStack>
   );
 }
 
-/** A tappable row inside a card, separated from the one above by a hairline. */
+/** A tappable row inside a card, with a hairline above every row but the first. */
 export function Row({ children, onPress, first }: { children: ReactNode; onPress?: () => void; first?: boolean }) {
   const c = useColors();
   return (
-    <Pressable
-      onPress={
-        onPress &&
-        (() => {
-          tap();
-          onPress();
-        })
-      }
-      style={({ pressed }) => [
-        styles.row,
-        !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.separator },
-        pressed && onPress && { opacity: 0.55 },
-      ]}
-    >
-      {children}
-    </Pressable>
+    <YStack>
+      {!first && <Separator borderColor={c.separator} />}
+      <XStack
+        paddingVertical="$3"
+        gap="$3"
+        pressStyle={onPress ? { opacity: 0.55 } : undefined}
+        onPress={
+          onPress &&
+          (() => {
+            tap();
+            onPress();
+          })
+        }
+      >
+        {children}
+      </XStack>
+    </YStack>
   );
 }
 
 export function Empty({ children }: { children: ReactNode }) {
   const c = useColors();
-  return <Text style={[styles.empty, { color: c.text3 }]}>{children}</Text>;
+  return (
+    <Paragraph size="$4" color={c.text3} paddingVertical="$1.5">
+      {children}
+    </Paragraph>
+  );
 }
 
 /** A value against a goal. Limits (calories) turn the warning color when exceeded; targets (protein) turn green
  * when reached; every state is also spelled out. The bar fills in from zero when it first appears. */
 export function Meter({ label, value, goal, unit, kind = 'neutral', hero = false }: { label: string; value: number; goal?: number; unit: string; kind?: 'limit' | 'target' | 'neutral'; hero?: boolean }) {
   const c = useColors();
-  const fraction = goal ? Math.min(1, value / goal) : 0;
+  const percent = goal ? Math.min(100, (value / goal) * 100) : 0;
   const over = goal !== undefined && value > goal;
   const met = kind === 'target' && goal !== undefined && value >= goal;
-  const fill = kind === 'limit' && over ? c.serious : met ? c.good : c.accent;
-  const width = useRef(new Animated.Value(0)).current;
+  const warn = kind === 'limit' && over;
+  const fill = warn ? c.serious : met ? c.good : c.accent;
+  // Start empty and grow to the value, so the bar animates in.
+  const [shown, setShown] = useState(0);
   useEffect(() => {
-    Animated.timing(width, { toValue: fraction, duration: 700, useNativeDriver: false }).start();
-  }, [fraction, width]);
+    const frame = requestAnimationFrame(() => setShown(percent));
+    return () => cancelAnimationFrame(frame);
+  }, [percent]);
 
   let note = 'No goal set';
   if (goal !== undefined) {
@@ -118,64 +138,55 @@ export function Meter({ label, value, goal, unit, kind = 'neutral', hero = false
   }
 
   return (
-    <View accessible accessibilityLabel={`${label}: ${formatNumber(value)}${goal ? ` of ${formatNumber(goal)}` : ''} ${unit}. ${note}`}>
-      <Text style={[styles.meterLabel, { color: c.text2 }]}>{label}</Text>
+    <YStack accessible accessibilityLabel={`${label}: ${formatNumber(value)}${goal ? ` of ${formatNumber(goal)}` : ''} ${unit}. ${note}`}>
+      <SizableText size="$3" color={c.text2}>
+        {label}
+      </SizableText>
       {hero ? (
-        <Text style={[styles.heroValue, { color: c.text }]}>
-          {formatNumber(value)}
-          <Text style={[styles.heroOf, { color: c.text2 }]}>{goal ? `  of ${formatNumber(goal)} ${unit}` : `  ${unit}`}</Text>
-        </Text>
+        <XStack alignItems="baseline" gap="$2">
+          <SizableText size="$11" fontWeight="700" color={c.text} letterSpacing={-1}>
+            {formatNumber(value)}
+          </SizableText>
+          <SizableText size="$5" color={c.text2}>
+            {goal ? `of ${formatNumber(goal)} ${unit}` : unit}
+          </SizableText>
+        </XStack>
       ) : (
-        <Text style={[styles.meterValue, { color: c.text }]}>
+        <SizableText size="$5" fontWeight="600" color={c.text}>
           {formatNumber(value)}
-          <Text style={{ color: c.text3, fontWeight: '400' }}>{goal ? ` / ${formatNumber(goal)}` : ''} {unit}</Text>
-        </Text>
+          <SizableText size="$5" color={c.text3}>
+            {goal ? ` / ${formatNumber(goal)}` : ''} {unit}
+          </SizableText>
+        </SizableText>
       )}
       {goal !== undefined && (
-        <View style={[styles.track, hero && styles.heroTrack, { backgroundColor: c.accentTrack }]}>
-          <Animated.View
-            style={[styles.fill, { backgroundColor: fill, width: width.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]}
-          />
-        </View>
+        <Progress value={shown} size={hero ? '$3' : '$1'} backgroundColor={c.accentTrack} marginTop={hero ? '$2.5' : '$1.5'} marginBottom="$1">
+          <Progress.Indicator transition="lazy" backgroundColor={fill} />
+        </Progress>
       )}
-      <Text style={[styles.meterNote, { color: met ? c.good : kind === 'limit' && over ? c.critical : c.text2 }, (met || (kind === 'limit' && over)) && { fontWeight: '600' }]}>
+      <SizableText size="$3" color={met ? c.good : warn ? c.critical : c.text2} fontWeight={met || warn ? '600' : '400'}>
         {note}
-      </Text>
-    </View>
+      </SizableText>
+    </YStack>
   );
 }
 
 export function Stat({ value, unit, label }: { value: string; unit?: string; label: string }) {
   const c = useColors();
   return (
-    <View style={styles.stat}>
-      <Text style={[styles.statValue, { color: c.text }]}>
+    <YStack flex={1} alignItems="center">
+      <SizableText size="$7" fontWeight="700" color={c.text}>
         {value}
-        {unit && <Text style={[styles.statUnit, { color: c.text2 }]}> {unit}</Text>}
-      </Text>
-      <Text style={[styles.statLabel, { color: c.text2 }]}>{label}</Text>
-    </View>
+        {unit && (
+          <SizableText size="$4" fontWeight="600" color={c.text2}>
+            {' '}
+            {unit}
+          </SizableText>
+        )}
+      </SizableText>
+      <SizableText size="$2" color={c.text2} textAlign="center">
+        {label}
+      </SizableText>
+    </YStack>
   );
 }
-
-export const styles = StyleSheet.create({
-  card: { borderRadius: 14, padding: 16, marginBottom: 14 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-  cardTitle: { fontSize: 17, fontWeight: '600' },
-  pill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  pillText: { fontSize: 15, fontWeight: '600' },
-  row: { paddingVertical: 12, flexDirection: 'row', gap: 12 },
-  empty: { fontSize: 15, paddingVertical: 6 },
-  meterLabel: { fontSize: 13 },
-  meterValue: { fontSize: 16, fontWeight: '600', marginTop: 1 },
-  heroValue: { fontSize: 48, fontWeight: '700', letterSpacing: -1, marginTop: 2 },
-  heroOf: { fontSize: 17, fontWeight: '400', letterSpacing: 0 },
-  track: { height: 8, borderRadius: 999, overflow: 'hidden', marginTop: 6, marginBottom: 4 },
-  heroTrack: { height: 12, marginTop: 10 },
-  fill: { height: '100%', borderRadius: 999 },
-  meterNote: { fontSize: 13 },
-  stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 22, fontWeight: '700' },
-  statUnit: { fontSize: 14, fontWeight: '600' },
-  statLabel: { fontSize: 12, marginTop: 2, textAlign: 'center' },
-});
