@@ -5,3 +5,8 @@ data
 *.db-*
 web/dist
 deploy/azure.env
+mobile/node_modules
+mobile/.expo
+mobile/dist
+mobile/ios
+mobile/android

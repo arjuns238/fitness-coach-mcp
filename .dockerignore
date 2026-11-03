@@ -8,3 +8,4 @@ test
 web/dist
 deploy/azure.env
 .claude
+mobile
