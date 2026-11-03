@@ -1,3 +1,5 @@
+// Tamagui's LinearGradient draws with expo-linear-gradient on iOS; this registers it (must run first).
+import '@tamagui/native/setup-expo-linear-gradient';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';

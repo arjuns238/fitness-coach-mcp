@@ -7,7 +7,9 @@ import { useColors } from './theme.ts';
 export function useTabStackOptions(): NativeStackNavigationOptions {
   const c = useColors();
   return {
-    headerLargeTitle: true,
+    // Screens draw their own big title in the content (ScreenTitle), so the bar itself stays empty and glassy.
+    headerLargeTitle: false,
+    title: '',
     // iOS draws its own scroll-edge effect under a transparent header; adding a blur on top doubles it.
     headerTransparent: Platform.OS === 'ios',
     headerShadowVisible: false,

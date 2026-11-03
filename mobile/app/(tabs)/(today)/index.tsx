@@ -2,18 +2,24 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, RefreshControl, ScrollView, Text } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { addDays, daysBetween, formatDay, formatNumber, formatTime, setSummary, timeFromNow, todayFromNow } from '../../../../web/src/format.ts';
+import { Button, Paragraph, XStack, YStack } from 'tamagui';
+import { addDays, daysBetween, formatNumber, formatTime, setSummary, timeFromNow, todayFromNow } from '../../../../web/src/format.ts';
 import { api, type DayDetail, type Meal, type WeighIn, type Workout } from '../../../lib/api.ts';
 import { editEntry } from '../../../lib/editing.ts';
+import { CalorieHero, EntryRow, ListSection, MACRO_TILES, MacroTile, mealIcon, ScreenTitle, useCardColor, weightIcon, workoutIcon } from '../../../lib/kit.tsx';
 import { useColors } from '../../../lib/theme.ts';
-import { Card, CardHeader, Empty, Meter, Row, tap, useLoad } from '../../../lib/ui.tsx';
+import { tap, useLoad } from '../../../lib/ui.tsx';
 
+const utc = (date: string) => new Date(`${date}T00:00:00Z`);
+const longDate = (date: string) => utc(date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+const dayName = (date: string) => utc(date).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
 const daysAgo = (n: number) => (n === 1 ? 'Yesterday' : `${n} days ago`);
 
 export default function Today() {
   const c = useColors();
+  const card = useCardColor();
   // undefined means "today", whatever date that is when the app is opened.
   const [date, setDate] = useState<string>();
   const [picking, setPicking] = useState(false);
@@ -58,13 +64,12 @@ export default function Today() {
     <>
       <Stack.Screen
         options={{
-          title: isToday || !shown ? 'Today' : formatDay(shown),
           headerRight: () => (
-            <View style={styles.nav}>
+            <XStack alignItems="center" gap="$3.5">
               <HeaderIcon name="calendar" label="Pick a date" onPress={() => setPicking((open) => !open)} />
               <HeaderIcon name="chevron.left" label="Previous day" onPress={() => shown && go(addDays(shown, -1))} />
               <HeaderIcon name="chevron.right" label="Next day" disabled={isToday} onPress={() => shown && go(addDays(shown, 1))} />
-            </View>
+            </XStack>
           ),
         }}
       />
@@ -72,36 +77,43 @@ export default function Today() {
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
           style={{ backgroundColor: c.background }}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
           refreshControl={<RefreshControl refreshing={loading && !!day} onRefresh={reload} tintColor={c.text3} />}
         >
-          <View style={styles.subtitleRow}>
-            <Text style={[styles.subtitle, { color: c.text2 }]}>
-              {shown ? (isToday ? formatDay(shown) : daysAgo(daysBetween(shown, today!))) : ' '}
-            </Text>
-            {!isToday && (
-              <Pressable onPress={() => go(undefined)} hitSlop={8}>
-                <Text style={[styles.link, { color: c.accentStrong }]}>Back to today</Text>
-              </Pressable>
+          <YStack gap="$4">
+            <ScreenTitle
+              title={!shown || isToday ? 'Today' : dayName(shown)}
+              subtitle={shown ? (isToday ? longDate(shown) : `${daysAgo(daysBetween(shown, today!))} · ${longDate(shown)}`) : ' '}
+              right={
+                !isToday ? (
+                  <Button size="$2.5" borderRadius="$10" theme="blue" fontWeight="700" onPress={() => go(undefined)}>
+                    Today
+                  </Button>
+                ) : undefined
+              }
+            />
+            {picking && shown && today && (
+              <YStack backgroundColor={card} borderRadius="$6" padding="$2" transition="quick" enterStyle={{ opacity: 0, y: -6 }}>
+                <DateTimePicker
+                  value={new Date(`${shown}T12:00:00`)}
+                  maximumDate={new Date(`${today}T12:00:00`)}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                  accentColor={c.accent}
+                  onDismiss={() => setPicking(false)}
+                  onValueChange={(_, picked) => {
+                    const iso = `${picked.getFullYear()}-${String(picked.getMonth() + 1).padStart(2, '0')}-${String(picked.getDate()).padStart(2, '0')}`;
+                    go(iso);
+                  }}
+                />
+              </YStack>
             )}
-          </View>
-          {picking && shown && today && (
-            <Card>
-              <DateTimePicker
-                value={new Date(`${shown}T12:00:00`)}
-                maximumDate={new Date(`${today}T12:00:00`)}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                accentColor={c.accent}
-                onDismiss={() => setPicking(false)}
-                onValueChange={(_, picked) => {
-                  const iso = `${picked.getFullYear()}-${String(picked.getMonth() + 1).padStart(2, '0')}-${String(picked.getDate()).padStart(2, '0')}`;
-                  go(iso);
-                }}
-              />
-            </Card>
-          )}
-          {error && !day ? <Empty>{error}</Empty> : day ? <DayContent day={day} isToday={isToday} /> : null}
+            {error && !day ? (
+              <Paragraph color="$color10">{error}</Paragraph>
+            ) : day ? (
+              <DayContent key={day.date} day={day} isToday={isToday} />
+            ) : null}
+          </YStack>
         </ScrollView>
       </GestureDetector>
     </>
@@ -111,130 +123,87 @@ export default function Today() {
 function HeaderIcon({ name, label, onPress, disabled }: { name: 'calendar' | 'chevron.left' | 'chevron.right'; label: string; onPress: () => void; disabled?: boolean }) {
   const c = useColors();
   return (
-    <Pressable onPress={onPress} disabled={disabled} hitSlop={6} accessibilityLabel={label} style={({ pressed }) => [styles.headerIcon, { opacity: disabled ? 0.3 : pressed ? 0.5 : 1 }]}>
+    <Pressable onPress={onPress} disabled={disabled} hitSlop={6} accessibilityLabel={label} style={({ pressed }) => ({ padding: 4, opacity: disabled ? 0.3 : pressed ? 0.5 : 1 })}>
       <SymbolView name={name} size={20} tintColor={c.accent} fallback={<Text style={{ color: c.accent, fontSize: 20 }}>{name === 'calendar' ? '▦' : name === 'chevron.left' ? '‹' : '›'}</Text>} />
     </Pressable>
   );
 }
 
+/** How many of a meal's items use a product's label rather than an estimate. */
+function labelNote(items: Meal['items']) {
+  const labelled = items.filter((item) => item.source).length;
+  if (!labelled) return undefined;
+  return labelled === items.length ? '✓ Label data' : `✓ ${labelled} of ${items.length} from labels`;
+}
+
+const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
+
 function DayContent({ day, isToday }: { day: DayDetail; isToday: boolean }) {
-  const c = useColors();
   const { totals, goals } = day;
   // Opens an add/edit sheet for this day; new entries default to now today, or midday on a past day.
   const open = (sheet: 'meal' | 'workout' | 'weight', entry?: Meal | Workout | WeighIn) => {
     editEntry(entry);
     router.push({ pathname: `/${sheet}`, params: { date: day.date, time: isToday ? timeFromNow(day.now) : '12:00', unit: day.profile.weight_unit } });
   };
-  return (
-    <>
-      <Card>
-        <Meter hero label="Calories" value={totals.calories} goal={goals.calories} unit="kcal" kind="limit" />
-        <View style={styles.macros}>
-          <View style={styles.macro}>
-            <Meter label="Protein" value={totals.protein_g} goal={goals.protein_g} unit="g" kind="target" />
-          </View>
-          <View style={styles.macro}>
-            <Meter label="Carbs" value={totals.carbs_g} goal={goals.carbs_g} unit="g" />
-          </View>
-          <View style={styles.macro}>
-            <Meter label="Fat" value={totals.fat_g} goal={goals.fat_g} unit="g" />
-          </View>
-        </View>
-      </Card>
 
-      <Card>
-        <CardHeader title="Meals" action="+ Add" onAction={() => open('meal')} />
-        {!day.meals.length && <Empty>Nothing logged yet. Tell Claude what you ate, or add it here.</Empty>}
+  return (
+    <YStack gap="$5">
+      <YStack gap="$3">
+        <CalorieHero value={totals.calories} goal={goals.calories} />
+        <XStack gap="$2.5">
+          <MacroTile {...MACRO_TILES.protein} label="Protein" value={totals.protein_g} goal={goals.protein_g} target />
+          <MacroTile {...MACRO_TILES.carbs} label="Carbs" value={totals.carbs_g} goal={goals.carbs_g} delay={80} />
+          <MacroTile {...MACRO_TILES.fat} label="Fat" value={totals.fat_g} goal={goals.fat_g} delay={160} />
+        </XStack>
+      </YStack>
+
+      <ListSection title="Meals" onAction={() => open('meal')} empty="Nothing logged yet. Tell Claude what you ate, or add it here.">
         {day.meals.map((meal, i) => (
-          <Row key={meal.id} first={i === 0} onPress={() => open('meal', meal)}>
-            <View style={styles.main}>
-              <Text style={[styles.meta, { color: c.text2 }]}>
-                {formatTime(meal.time)}
-                {meal.meal_type ? ` · ${meal.meal_type[0].toUpperCase()}${meal.meal_type.slice(1)}` : ''}
-              </Text>
-              <Text style={[styles.title, { color: c.text }]}>{meal.description}</Text>
-              <Text style={[styles.meta, { color: c.text2 }]} numberOfLines={1}>
-                {meal.items.map((item) => item.name).join(', ')}
-              </Text>
-              <LabelNote items={meal.items} />
-            </View>
-            <View style={styles.side}>
-              <Text style={[styles.sideValue, { color: c.text }]}>{formatNumber(meal.calories)} kcal</Text>
-              <Text style={[styles.meta, { color: c.text2 }]}>
-                P {formatNumber(meal.protein_g)} · C {formatNumber(meal.carbs_g)} · F {formatNumber(meal.fat_g)}
-              </Text>
-            </View>
-          </Row>
+          <EntryRow
+            key={meal.id}
+            separated={i > 0}
+            tile={mealIcon(meal.meal_type)}
+            title={meal.description}
+            detail={`${formatTime(meal.time)}${meal.meal_type ? ` · ${capitalize(meal.meal_type)}` : ''} · ${meal.items.map((item) => item.name).join(', ')}`}
+            note={labelNote(meal.items)}
+            value={`${formatNumber(meal.calories)} kcal`}
+            valueDetail={`P ${formatNumber(meal.protein_g)} · C ${formatNumber(meal.carbs_g)} · F ${formatNumber(meal.fat_g)}`}
+            onPress={() => open('meal', meal)}
+          />
         ))}
-      </Card>
+      </ListSection>
 
-      <Card>
-        <CardHeader title="Workouts" action="+ Add" onAction={() => open('workout')} />
-        {!day.workouts.length && <Empty>No workout logged.</Empty>}
-        {day.workouts.map((workout, i) => (
-          <Row key={workout.id} first={i === 0} onPress={() => open('workout', workout)}>
-            <View style={styles.main}>
-              <Text style={[styles.meta, { color: c.text2 }]}>
-                {formatTime(workout.time)} · {workout.type[0].toUpperCase() + workout.type.slice(1)}
-              </Text>
-              <Text style={[styles.title, { color: c.text }]}>{workout.description}</Text>
-              {workout.exercises.map((exercise, j) => (
-                <Text key={j} style={[styles.meta, { color: c.text2 }]}>
-                  {exercise.name}
-                  {exercise.sets?.length ? ` · ${setSummary(exercise.sets)}` : ''}
-                  {exercise.distance ? ` · ${exercise.distance} ${exercise.distance_unit ?? 'mi'}` : ''}
-                </Text>
-              ))}
-            </View>
-            <View style={styles.side}>
-              {workout.duration_min ? <Text style={[styles.sideValue, { color: c.text }]}>{formatNumber(workout.duration_min)} min</Text> : null}
-              {workout.effort ? <Text style={[styles.meta, { color: c.text2 }]}>Effort {workout.effort}/10</Text> : null}
-            </View>
-          </Row>
-        ))}
-      </Card>
+      <ListSection title="Workouts" onAction={() => open('workout')} empty="No workout logged.">
+        {day.workouts.map((workout, i) => {
+          const first = workout.exercises[0];
+          const summary = first ? `${first.name}${first.sets?.length ? ` ${setSummary(first.sets)}` : ''}${workout.exercises.length > 1 ? ` +${workout.exercises.length - 1} more` : ''}` : capitalize(workout.type);
+          return (
+            <EntryRow
+              key={workout.id}
+              separated={i > 0}
+              tile={workoutIcon(workout.type)}
+              title={workout.description}
+              detail={`${formatTime(workout.time)} · ${summary}`}
+              value={workout.duration_min ? `${formatNumber(workout.duration_min)} min` : undefined}
+              valueDetail={workout.effort ? `Effort ${workout.effort}/10` : undefined}
+              onPress={() => open('workout', workout)}
+            />
+          );
+        })}
+      </ListSection>
 
-      <Card>
-        <CardHeader title="Weight" action="+ Log" onAction={() => open('weight')} />
-        {!day.weigh_ins.length && <Empty>No weigh-in.</Empty>}
+      <ListSection title="Weight" actionLabel="Log" onAction={() => open('weight')} empty="No weigh-in.">
         {day.weigh_ins.map((weighIn, i) => (
-          <Row key={weighIn.id} first={i === 0} onPress={() => open('weight', weighIn)}>
-            <View style={styles.main}>
-              <Text style={[styles.title, { color: c.text }]}>
-                {weighIn.weight} {weighIn.unit}
-              </Text>
-              {weighIn.notes ? <Text style={[styles.meta, { color: c.text2 }]}>{weighIn.notes}</Text> : null}
-            </View>
-            <Text style={[styles.meta, { color: c.text2 }]}>{formatTime(weighIn.time)}</Text>
-          </Row>
+          <EntryRow
+            key={weighIn.id}
+            separated={i > 0}
+            tile={weightIcon}
+            title={`${weighIn.weight} ${weighIn.unit}`}
+            detail={`${formatTime(weighIn.time)}${weighIn.notes ? ` · ${weighIn.notes}` : ''}`}
+            onPress={() => open('weight', weighIn)}
+          />
         ))}
-      </Card>
-    </>
+      </ListSection>
+    </YStack>
   );
 }
-
-/** How many of a meal's items use a product's label rather than an estimate. */
-function LabelNote({ items }: { items: Meal['items'] }) {
-  const c = useColors();
-  const labelled = items.filter((item) => item.source).length;
-  if (!labelled) return null;
-  return (
-    <Text style={[styles.meta, { color: c.text2 }]}>✓ {labelled === items.length ? 'Label data' : `${labelled} of ${items.length} items from labels`}</Text>
-  );
-}
-
-const styles = StyleSheet.create({
-  content: { paddingHorizontal: 16, paddingBottom: 32 },
-  nav: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  headerIcon: { padding: 4 },
-  subtitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, marginTop: 2 },
-  subtitle: { fontSize: 15 },
-  link: { fontSize: 15, fontWeight: '600' },
-  macros: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  macro: { flex: 1 },
-  main: { flex: 1, minWidth: 0, gap: 1 },
-  side: { alignItems: 'flex-end', gap: 1 },
-  title: { fontSize: 16, fontWeight: '600' },
-  meta: { fontSize: 13 },
-  sideValue: { fontSize: 16, fontWeight: '600' },
-});
