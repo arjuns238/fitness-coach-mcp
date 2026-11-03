@@ -1,14 +1,12 @@
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, RefreshControl, ScrollView, Text } from 'react-native';
+import { AppState, RefreshControl, ScrollView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Button, Paragraph, XStack, YStack } from 'tamagui';
 import { addDays, daysBetween, formatNumber, formatTime, setSummary, timeFromNow, todayFromNow } from '../../../../web/src/format.ts';
 import { api, type DayDetail, type Meal, type WeighIn, type Workout } from '../../../lib/api.ts';
 import { editEntry } from '../../../lib/editing.ts';
-import { CalorieHero, EntryRow, ListSection, MACRO_TILES, MacroTile, mealIcon, ScreenTitle, useCardColor, weightIcon, workoutIcon } from '../../../lib/kit.tsx';
+import { CalorieHero, EntryRow, ListSection, MACRO_TILES, MacroTile, mealIcon, ScreenTitle, weightIcon, workoutIcon } from '../../../lib/kit.tsx';
 import { useColors } from '../../../lib/theme.ts';
 import { tap, useLoad } from '../../../lib/ui.tsx';
 
@@ -19,10 +17,8 @@ const daysAgo = (n: number) => (n === 1 ? 'Yesterday' : `${n} days ago`);
 
 export default function Today() {
   const c = useColors();
-  const card = useCardColor();
   // undefined means "today", whatever date that is when the app is opened.
   const [date, setDate] = useState<string>();
-  const [picking, setPicking] = useState(false);
   // History links here with ?date=YYYY-MM-DD.
   const { date: linked } = useLocalSearchParams<{ date?: string }>();
   useEffect(() => {
@@ -50,7 +46,6 @@ export default function Today() {
   const isToday = !date || date === today;
   const go = (next: string | undefined) => {
     tap();
-    setPicking(false);
     setDate(next && next !== today ? next : undefined);
   };
 
@@ -67,17 +62,6 @@ export default function Today() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <XStack alignItems="center" gap="$3.5">
-              <HeaderIcon name="calendar" label="Pick a date" onPress={() => setPicking((open) => !open)} />
-              <HeaderIcon name="chevron.left" label="Previous day" onPress={() => shown && go(addDays(shown, -1))} />
-              <HeaderIcon name="chevron.right" label="Next day" disabled={isToday} onPress={() => shown && go(addDays(shown, 1))} />
-            </XStack>
-          ),
-        }}
-      />
       <GestureDetector gesture={swipe}>
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
@@ -97,22 +81,6 @@ export default function Today() {
                 ) : undefined
               }
             />
-            {picking && shown && today && (
-              <YStack backgroundColor={card} borderRadius="$6" padding="$2" transition="quick" enterStyle={{ opacity: 0, y: -6 }}>
-                <DateTimePicker
-                  value={new Date(`${shown}T12:00:00`)}
-                  maximumDate={new Date(`${today}T12:00:00`)}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                  accentColor={c.accent}
-                  onDismiss={() => setPicking(false)}
-                  onValueChange={(_, picked) => {
-                    const iso = `${picked.getFullYear()}-${String(picked.getMonth() + 1).padStart(2, '0')}-${String(picked.getDate()).padStart(2, '0')}`;
-                    go(iso);
-                  }}
-                />
-              </YStack>
-            )}
             {error && !day ? (
               <Paragraph color="$color10">{error}</Paragraph>
             ) : day ? (
@@ -122,15 +90,6 @@ export default function Today() {
         </ScrollView>
       </GestureDetector>
     </>
-  );
-}
-
-function HeaderIcon({ name, label, onPress, disabled }: { name: 'calendar' | 'chevron.left' | 'chevron.right'; label: string; onPress: () => void; disabled?: boolean }) {
-  const c = useColors();
-  return (
-    <Pressable onPress={onPress} disabled={disabled} hitSlop={6} accessibilityLabel={label} style={({ pressed }) => ({ padding: 4, opacity: disabled ? 0.3 : pressed ? 0.5 : 1 })}>
-      <SymbolView name={name} size={20} tintColor={c.accent} fallback={<Text style={{ color: c.accent, fontSize: 20 }}>{name === 'calendar' ? '▦' : name === 'chevron.left' ? '‹' : '›'}</Text>} />
-    </Pressable>
   );
 }
 
