@@ -1,10 +1,12 @@
-// Log or edit a weigh-in, as an iOS page sheet.
+// Log or edit a weigh-in, as an iOS page sheet: one big number, its unit, and when.
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Paragraph, Theme, YStack } from 'tamagui';
 import { api, type WeighIn, type WeightUnit } from '../lib/api.ts';
 import { takeEntry } from '../lib/editing.ts';
 import { DestructiveButton, formStyles, NumberField, Section, Segmented, TextField, WhenRow } from '../lib/forms.tsx';
+import { IconTile, weightIcon } from '../lib/kit.tsx';
 import { HeaderButton } from '../lib/navigation.tsx';
 import { useSession } from '../lib/session.tsx';
 import { useColors } from '../lib/theme.ts';
@@ -56,12 +58,15 @@ export default function WeightSheet() {
       />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={formStyles.content} keyboardShouldPersistTaps="handled">
+          <YStack alignItems="center" marginVertical="$3">
+            <IconTile {...weightIcon} />
+          </YStack>
           <Section>
-            <NumberField label="Weight" value={weight} onChange={setWeight} autoFocus={!entry} placeholder={unit === 'kg' ? 'e.g. 80.5' : 'e.g. 177.4'} />
+            <NumberField large value={weight} onChange={setWeight} autoFocus={!entry} placeholder={unit === 'kg' ? '80.5' : '177.4'} suffix={unit} />
             <Segmented
               options={[
-                { value: 'lb', label: 'lb' },
-                { value: 'kg', label: 'kg' },
+                { value: 'lb', label: 'Pounds' },
+                { value: 'kg', label: 'Kilograms' },
               ]}
               value={unit}
               onChange={setUnit}
@@ -69,12 +74,16 @@ export default function WeightSheet() {
             <WhenRow date={date} time={time} onDate={setDate} onTime={setTime} />
           </Section>
           <Section>
-            <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" />
+            <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional, e.g. after a run" />
           </Section>
-          {error ? <Text style={{ color: c.critical, fontSize: 15, marginBottom: 12 }}>{error}</Text> : null}
-          {entry && (
-            <DestructiveButton label="Delete weigh-in" title="Delete this weigh-in?" message="It will be removed from your log." onConfirm={() => run(() => api.remove('weigh-ins', entry.id), 'Weigh-in deleted')} />
-          )}
+          {error ? (
+            <Theme name="red">
+              <Paragraph color="$color10" marginBottom="$3">
+                {error}
+              </Paragraph>
+            </Theme>
+          ) : null}
+          {entry && <DestructiveButton label="Delete weigh-in" title="Delete this weigh-in?" message="It will be removed from your log." onConfirm={() => run(() => api.remove('weigh-ins', entry.id), 'Weigh-in deleted')} />}
         </ScrollView>
       </KeyboardAvoidingView>
     </>

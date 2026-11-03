@@ -218,6 +218,9 @@ const MEAL_ICONS: Record<string, { theme: ThemeName; icon: Icon }> = {
   drink: { theme: 'blue', icon: CupSoda },
 };
 export const mealIcon = (mealType: string | null) => MEAL_ICONS[mealType ?? ''] ?? { theme: 'gray' as ThemeName, icon: Utensils };
+const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
+/** The meal types as choices, each with the icon and color used for it everywhere. */
+export const MEAL_TYPES = (['breakfast', 'lunch', 'dinner', 'snack', 'drink'] as const).map((value) => ({ value, label: capitalize(value), ...MEAL_ICONS[value] }));
 
 const WORKOUT_ICONS: Record<string, { theme: ThemeName; icon: Icon }> = {
   strength: { theme: 'blue', icon: Dumbbell },
@@ -226,6 +229,7 @@ const WORKOUT_ICONS: Record<string, { theme: ThemeName; icon: Icon }> = {
   mobility: { theme: 'purple', icon: PersonStanding },
 };
 export const workoutIcon = (type: string) => WORKOUT_ICONS[type] ?? { theme: 'yellow' as ThemeName, icon: Zap };
+export const WORKOUT_TYPES = (['strength', 'cardio', 'sport', 'mobility', 'other'] as const).map((value) => ({ value, label: capitalize(value), ...workoutIcon(value) }));
 export const weightIcon = { theme: 'gray' as ThemeName, icon: Scale };
 
 /** A section of the page: a bold heading with an "Add" button, then a grouped list (or an empty message). */

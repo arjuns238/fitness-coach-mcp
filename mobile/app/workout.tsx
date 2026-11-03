@@ -1,25 +1,28 @@
 // Add or edit a workout, as an iOS page sheet: type, effort, duration, and exercises with sets or distance.
+import { MinusCircle } from '@tamagui/lucide-icons-2/icons/MinusCircle';
+import { X } from '@tamagui/lucide-icons-2/icons/X';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Input } from 'tamagui';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Button, Input, Paragraph, SizableText, Theme, XStack, YStack } from 'tamagui';
 import { api, type Exercise, type WeightUnit, type Workout } from '../lib/api.ts';
 import { takeEntry } from '../lib/editing.ts';
-import { DestructiveButton, formStyles, LinkButton, NumberField, Section, Segmented, TextField, WhenRow } from '../lib/forms.tsx';
+import { ChoiceChips, DestructiveButton, formStyles, LinkButton, NumberField, Section, TextField, useFieldColor, WhenRow } from '../lib/forms.tsx';
+import { useCardColor, WORKOUT_TYPES } from '../lib/kit.tsx';
 import { HeaderButton } from '../lib/navigation.tsx';
 import { useSession } from '../lib/session.tsx';
 import { useColors } from '../lib/theme.ts';
 import { useToast } from '../lib/toast.tsx';
 import { success, tap } from '../lib/ui.tsx';
 
-const TYPES = ['strength', 'cardio', 'sport', 'mobility', 'other'] as const;
-type WorkoutType = (typeof TYPES)[number];
+type WorkoutType = (typeof WORKOUT_TYPES)[number]['value'];
 
 export default function WorkoutSheet() {
   const c = useColors();
   const toast = useToast();
   const { handle } = useSession();
+  const card = useCardColor();
+  const field = useFieldColor();
   const params = useLocalSearchParams<{ date: string; time: string; unit: WeightUnit }>();
   const weightUnit = params.unit ?? 'lb';
   const [entry] = useState(() => takeEntry<Workout>());
@@ -87,101 +90,91 @@ export default function WorkoutSheet() {
         <ScrollView contentContainerStyle={formStyles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
           <Section>
             <TextField label="Workout" value={description} onChangeText={setDescription} placeholder="e.g. push day, 5k run" />
-            <Segmented options={TYPES.map((t) => ({ value: t, label: t[0].toUpperCase() + t.slice(1) }))} value={type} onChange={setType} />
-            <View style={styles.row}>
+            <ChoiceChips options={WORKOUT_TYPES} value={type} onChange={(value) => value && setType(value)} />
+            <XStack gap="$2">
               <NumberField compact label="Minutes" value={duration} onChange={setDuration} placeholder="—" />
               <NumberField compact integer label="Effort (1–10)" value={effort} onChange={setEffort} placeholder="—" />
-            </View>
+            </XStack>
             <WhenRow date={date} time={time} onDate={setDate} onTime={setTime} />
           </Section>
 
-          <Text style={[styles.heading, { color: c.text2 }]}>EXERCISES</Text>
-          {exercises.map((exercise, index) => (
-            <View key={index} style={[styles.exercise, { backgroundColor: c.surface }]}>
-              <View style={styles.exerciseHead}>
-                <Input
-                  flex={1}
-                  size="$4"
-                  value={exercise.name}
-                  onChangeText={(name: string) => setExercise(index, { name })}
-                  placeholder="Exercise, e.g. Bench Press"
-                  placeholderTextColor={c.text3 as never}
-                  backgroundColor={c.fill}
-                  borderWidth={0}
-                  color={c.text}
-                  fontWeight="600"
-                />
-                <Pressable onPress={() => setExercises(exercises.filter((_, i) => i !== index))} hitSlop={10} accessibilityLabel="Remove exercise">
-                  <SymbolView name="xmark.circle.fill" size={22} tintColor={c.text3} fallback={<Text style={{ color: c.text3, fontSize: 20 }}>×</Text>} />
-                </Pressable>
-              </View>
-              {showSets &&
-                (exercise.sets ?? []).map((set, setIndex) => {
-                  const setSet = (patch: object) => setExercise(index, { sets: exercise.sets!.map((s, i) => (i === setIndex ? { ...s, ...patch } : s)) });
-                  return (
-                    <View key={setIndex} style={styles.setRow}>
-                      <Text style={[styles.setLabel, { color: c.text3 }]}>{setIndex + 1}</Text>
-                      <NumberField compact integer label="Reps" value={set.reps} onChange={(reps) => setSet({ reps })} />
-                      <NumberField compact label={`Weight (${set.unit ?? weightUnit})`} value={set.weight} onChange={(weight) => setSet({ weight, unit: set.unit ?? weightUnit })} />
-                      <Pressable
-                        onPress={() => setExercise(index, { sets: exercise.sets!.filter((_, i) => i !== setIndex) })}
-                        hitSlop={8}
-                        accessibilityLabel={`Remove set ${setIndex + 1}`}
-                        style={styles.removeSet}
-                      >
-                        <SymbolView name="minus.circle" size={20} tintColor={c.text3} fallback={<Text style={{ color: c.text3 }}>−</Text>} />
-                      </Pressable>
-                    </View>
-                  );
-                })}
-              {showSets && (
-                <LinkButton
-                  label="+ Add set"
-                  // A new set starts as a copy of the last one; most sets repeat.
-                  onPress={() => {
-                    const sets = exercise.sets ?? [];
-                    setExercise(index, { sets: [...sets, sets.length ? { ...sets[sets.length - 1] } : { unit: weightUnit }] });
-                  }}
-                />
-              )}
-              {showDistance && (
-                <View style={styles.row}>
-                  <NumberField compact label={`Distance (${exercise.distance_unit ?? 'mi'})`} value={exercise.distance} onChange={(distance) => setExercise(index, { distance })} />
-                  <NumberField compact label="Minutes" value={exercise.duration_min} onChange={(duration_min) => setExercise(index, { duration_min })} />
-                </View>
-              )}
-            </View>
-          ))}
-          <LinkButton
-            label="+ Add exercise"
-            onPress={() => {
-              tap();
-              setExercises([...exercises, { name: '', ...(showSets ? { sets: [{ unit: weightUnit }] } : {}) }]);
-            }}
-          />
+          <SizableText size="$2" fontWeight="600" color="$color10" marginLeft="$3" marginBottom="$1.5" letterSpacing={0.6}>
+            EXERCISES
+          </SizableText>
+          <YStack gap="$2.5">
+            {exercises.map((exercise, index) => (
+              <YStack key={index} backgroundColor={card} borderRadius="$6" padding="$3.5" gap="$2.5" transition="quick" enterStyle={{ opacity: 0, y: 8 }}>
+                <XStack alignItems="center" gap="$2">
+                  <Input flex={1} size="$4" value={exercise.name} onChangeText={(name: string) => setExercise(index, { name })} placeholder="Exercise, e.g. Bench Press" placeholderTextColor={'$color8' as never} backgroundColor={field} borderWidth={0} fontWeight="700" />
+                  <Button circular size="$2" chromeless icon={<X size={16} color="$color10" />} accessibilityLabel="Remove exercise" onPress={() => setExercises(exercises.filter((_, i) => i !== index))} />
+                </XStack>
+                {showSets &&
+                  (exercise.sets ?? []).map((set, setIndex) => {
+                    const setSet = (patch: object) => setExercise(index, { sets: exercise.sets!.map((s, i) => (i === setIndex ? { ...s, ...patch } : s)) });
+                    return (
+                      <XStack key={setIndex} alignItems="flex-end" gap="$2">
+                        <Theme name="blue">
+                          <YStack width={28} height={38} borderRadius="$3" backgroundColor="$color4" alignItems="center" justifyContent="center">
+                            <SizableText size="$2" fontWeight="800" color="$color11">
+                              {setIndex + 1}
+                            </SizableText>
+                          </YStack>
+                        </Theme>
+                        <NumberField compact integer label="Reps" value={set.reps} onChange={(reps) => setSet({ reps })} />
+                        <NumberField compact label={`Weight (${set.unit ?? weightUnit})`} value={set.weight} onChange={(weight) => setSet({ weight, unit: set.unit ?? weightUnit })} />
+                        <Button
+                          circular
+                          size="$2.5"
+                          chromeless
+                          icon={<MinusCircle size={18} color="$color9" />}
+                          accessibilityLabel={`Remove set ${setIndex + 1}`}
+                          onPress={() => setExercise(index, { sets: exercise.sets!.filter((_, i) => i !== setIndex) })}
+                        />
+                      </XStack>
+                    );
+                  })}
+                {showSets && (
+                  <LinkButton
+                    label="+ Add set"
+                    // A new set starts as a copy of the last one; most sets repeat.
+                    onPress={() => {
+                      const sets = exercise.sets ?? [];
+                      setExercise(index, { sets: [...sets, sets.length ? { ...sets[sets.length - 1] } : { unit: weightUnit }] });
+                    }}
+                  />
+                )}
+                {showDistance && (
+                  <XStack gap="$2">
+                    <NumberField compact label={`Distance (${exercise.distance_unit ?? 'mi'})`} value={exercise.distance} onChange={(distance) => setExercise(index, { distance })} />
+                    <NumberField compact label="Minutes" value={exercise.duration_min} onChange={(duration_min) => setExercise(index, { duration_min })} />
+                  </XStack>
+                )}
+              </YStack>
+            ))}
+          </YStack>
+          <YStack marginTop="$1" marginBottom="$4">
+            <LinkButton
+              label="+ Add exercise"
+              onPress={() => {
+                tap();
+                setExercises([...exercises, { name: '', ...(showSets ? { sets: [{ unit: weightUnit }] } : {}) }]);
+              }}
+            />
+          </YStack>
 
-          <View style={{ height: 16 }} />
           <Section>
             <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" />
           </Section>
-          {error ? <Text style={[styles.error, { color: c.critical }]}>{error}</Text> : null}
-          {entry && (
-            <DestructiveButton label="Delete workout" title="Delete this workout?" message="It will be removed from your log." onConfirm={() => run(() => api.remove('workouts', entry.id), 'Workout deleted')} />
-          )}
+          {error ? (
+            <Theme name="red">
+              <Paragraph color="$color10" marginBottom="$3">
+                {error}
+              </Paragraph>
+            </Theme>
+          ) : null}
+          {entry && <DestructiveButton label="Delete workout" title="Delete this workout?" message="It will be removed from your log." onConfirm={() => run(() => api.remove('workouts', entry.id), 'Workout deleted')} />}
         </ScrollView>
       </KeyboardAvoidingView>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 8 },
-  heading: { fontSize: 13, marginLeft: 16, marginBottom: 6 },
-  exercise: { borderRadius: 12, padding: 12, gap: 10, marginBottom: 10 },
-  exerciseHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  nameInput: { flex: 1, minHeight: 42, borderRadius: 9, paddingHorizontal: 10, fontSize: 16, fontWeight: '600' },
-  setRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  setLabel: { width: 18, fontSize: 15, paddingBottom: 10, textAlign: 'center' },
-  removeSet: { paddingBottom: 9 },
-  error: { fontSize: 15, marginBottom: 12 },
-});

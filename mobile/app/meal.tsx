@@ -1,35 +1,40 @@
 // Add or edit a meal, as an iOS page sheet. Packaged foods can be searched or scanned for their label data.
+import { Minus } from '@tamagui/lucide-icons-2/icons/Minus';
+import { Plus } from '@tamagui/lucide-icons-2/icons/Plus';
+import { ScanBarcode } from '@tamagui/lucide-icons-2/icons/ScanBarcode';
+import { Search } from '@tamagui/lucide-icons-2/icons/Search';
+import { X } from '@tamagui/lucide-icons-2/icons/X';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Input, SizableText, XStack, YStack } from 'tamagui';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Button, Input, Paragraph, SizableText, Theme, XStack, YStack } from 'tamagui';
 import { formatDecimal, formatNumber } from '../../web/src/format.ts';
 import { itemFromMatch, withServings } from '../../web/src/meal-items.ts';
 import { api, type FoodItem, type FoodMatch, type Meal } from '../lib/api.ts';
 import { onScanned, takeEntry } from '../lib/editing.ts';
-import { DestructiveButton, formStyles, LinkButton, NumberField, Section, Segmented, TextField, WhenRow } from '../lib/forms.tsx';
+import { ChoiceChips, DestructiveButton, formStyles, LinkButton, NumberField, Section, TextField, useFieldColor, WhenRow } from '../lib/forms.tsx';
+import { IconTile, MEAL_TYPES, mealIcon, useCardColor } from '../lib/kit.tsx';
 import { HeaderButton } from '../lib/navigation.tsx';
 import { useSession } from '../lib/session.tsx';
 import { useColors } from '../lib/theme.ts';
 import { useToast } from '../lib/toast.tsx';
 import { success, tap } from '../lib/ui.tsx';
 
-const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack', 'drink'] as const;
 const MACROS = [
   ['calories', 'kcal'],
-  ['protein_g', 'Protein g'],
-  ['carbs_g', 'Carbs g'],
-  ['fat_g', 'Fat g'],
+  ['protein_g', 'Protein'],
+  ['carbs_g', 'Carbs'],
+  ['fat_g', 'Fat'],
 ] as const;
 const SOURCE_NAMES = { usda: 'USDA', off: 'Open Food Facts' };
 const blankItem = (): FoodItem => ({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
-const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
 
 export default function MealSheet() {
   const c = useColors();
   const toast = useToast();
   const { handle } = useSession();
+  const card = useCardColor();
+  const field = useFieldColor();
   const params = useLocalSearchParams<{ date: string; time: string }>();
   const [entry] = useState(() => takeEntry<Meal>());
   const [description, setDescription] = useState(entry?.description ?? '');
@@ -113,17 +118,21 @@ export default function MealSheet() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={formStyles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
           {recent.length > 0 && (
-            <Section title="Repeat a recent meal">
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recent}>
+            <YStack marginBottom="$5" gap="$2">
+              <SizableText size="$2" fontWeight="600" color="$color10" marginLeft="$3" letterSpacing={0.6}>
+                REPEAT A RECENT MEAL
+              </SizableText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {recent.map((meal) => (
-                  <YStack
+                  <XStack
                     key={meal.id}
-                    backgroundColor={c.fill}
-                    borderRadius="$4"
-                    paddingHorizontal="$3"
-                    paddingVertical="$2"
-                    maxWidth={220}
-                    pressStyle={{ opacity: 0.6, scale: 0.97 }}
+                    backgroundColor={card}
+                    borderRadius="$5"
+                    padding="$2.5"
+                    gap="$2.5"
+                    alignItems="center"
+                    maxWidth={240}
+                    pressStyle={{ scale: 0.97, opacity: 0.8 }}
                     onPress={() => {
                       tap();
                       setDescription(meal.description);
@@ -131,116 +140,151 @@ export default function MealSheet() {
                       setItems(meal.items.map((item) => ({ ...item })));
                     }}
                   >
-                    <SizableText size="$4" fontWeight="600" numberOfLines={1} color={c.text}>
-                      {meal.description}
-                    </SizableText>
-                    <SizableText size="$2" color={c.text2}>
-                      {formatNumber(meal.calories)} kcal
-                    </SizableText>
-                  </YStack>
+                    <IconTile {...mealIcon(meal.meal_type)} />
+                    <YStack flexShrink={1}>
+                      <SizableText size="$3" fontWeight="700" numberOfLines={1}>
+                        {meal.description}
+                      </SizableText>
+                      <SizableText size="$2" color="$color10">
+                        {formatNumber(meal.calories)} kcal
+                      </SizableText>
+                    </YStack>
+                  </XStack>
                 ))}
               </ScrollView>
-            </Section>
+            </YStack>
           )}
 
           <Section>
             <TextField label="What was it?" value={description} onChangeText={setDescription} placeholder="e.g. chicken burrito bowl" />
-            <Segmented allowNone options={MEAL_TYPES.map((type) => ({ value: type, label: capitalize(type) }))} value={(mealType as (typeof MEAL_TYPES)[number]) || ''} onChange={setMealType} />
+            <ChoiceChips allowNone options={MEAL_TYPES} value={(mealType as (typeof MEAL_TYPES)[number]['value']) || ''} onChange={setMealType} />
             <WhenRow date={date} time={time} onDate={setDate} onTime={setTime} />
           </Section>
 
           <Section title="Foods" footer="Search or scan packaged foods to use their label. Everything else is an estimate you can adjust.">
-            <FoodFinder onAdd={(match) => {
-              addItem(itemFromMatch(match));
-              toast(`Added ${match.source.product}`);
-            }} />
+            <FoodFinder
+              onAdd={(match) => {
+                addItem(itemFromMatch(match));
+                toast(`Added ${match.source.product}`);
+              }}
+            />
           </Section>
 
-          {items.map((item, index) => (
-            <View key={index} style={[styles.item, { backgroundColor: c.surface }]}>
-              <View style={styles.itemHead}>
+          <YStack gap="$2.5" marginBottom="$2">
+            {items.map((item, index) => (
+              <YStack key={index} backgroundColor={card} borderRadius="$6" padding="$3.5" gap="$3" transition="quick" enterStyle={{ opacity: 0, y: 8 }}>
+                <XStack alignItems="center" gap="$2">
+                  {item.source ? (
+                    <YStack flex={1}>
+                      <SizableText size="$5" fontWeight="700">
+                        {item.name}
+                      </SizableText>
+                      {item.quantity ? (
+                        <SizableText size="$2" color="$color10">
+                          {item.quantity}
+                        </SizableText>
+                      ) : null}
+                    </YStack>
+                  ) : (
+                    <>
+                      <Input flex={1} size="$3" value={item.name} onChangeText={(name: string) => setItem(index, { name })} placeholder="Food" placeholderTextColor={'$color8' as never} backgroundColor={field} borderWidth={0} fontWeight="700" />
+                      <Input width={110} size="$3" value={item.quantity ?? ''} onChangeText={(quantity: string) => setItem(index, { quantity })} placeholder="Amount" placeholderTextColor={'$color8' as never} backgroundColor={field} borderWidth={0} />
+                    </>
+                  )}
+                  {items.length > 1 && (
+                    <Button circular size="$2" chromeless icon={<X size={16} color="$color10" />} accessibilityLabel="Remove food" onPress={() => setItems(items.filter((_, i) => i !== index))} />
+                  )}
+                </XStack>
+                <XStack gap="$2">
+                  {MACROS.map(([key, label]) => (
+                    <NumberField
+                      key={key}
+                      compact
+                      label={label}
+                      value={item[key] || undefined}
+                      placeholder="0"
+                      // Typing over label numbers makes them your own (and stops the server looking the label up again).
+                      onChange={(value) => setItem(index, { [key]: value ?? 0, ...(item.source ? { source: undefined, brand: undefined } : {}) })}
+                    />
+                  ))}
+                </XStack>
                 {item.source ? (
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.itemName, { color: c.text }]}>{item.name}</Text>
-                    {item.quantity ? <Text style={[styles.small, { color: c.text2 }]}>{item.quantity}</Text> : null}
-                  </View>
-                ) : (
-                  <>
-                    <Input
-                      flex={1}
-                      size="$3"
-                      value={item.name}
-                      onChangeText={(name: string) => setItem(index, { name })}
-                      placeholder="Food"
-                      placeholderTextColor={c.text3 as never}
-                      backgroundColor={c.fill}
-                      borderWidth={0}
-                      color={c.text}
-                      fontWeight="600"
-                    />
-                    <Input
-                      width={110}
-                      size="$3"
-                      value={item.quantity ?? ''}
-                      onChangeText={(quantity: string) => setItem(index, { quantity })}
-                      placeholder="Amount"
-                      placeholderTextColor={c.text3 as never}
-                      backgroundColor={c.fill}
-                      borderWidth={0}
-                      color={c.text}
-                    />
-                  </>
-                )}
-                {items.length > 1 && (
-                  <Pressable onPress={() => setItems(items.filter((_, i) => i !== index))} hitSlop={10} accessibilityLabel="Remove food">
-                    <SymbolView name="xmark.circle.fill" size={22} tintColor={c.text3} fallback={<Text style={{ color: c.text3, fontSize: 20 }}>×</Text>} />
-                  </Pressable>
-                )}
-              </View>
-              <View style={styles.macroRow}>
-                {MACROS.map(([key, label]) => (
-                  <NumberField
-                    key={key}
-                    compact
-                    label={label}
-                    value={item[key] || undefined}
-                    placeholder="0"
-                    // Typing over label numbers makes them your own (and stops the server looking the label up again).
-                    onChange={(value) => setItem(index, { [key]: value ?? 0, ...(item.source ? { source: undefined, brand: undefined } : {}) })}
-                  />
-                ))}
-              </View>
-              {item.source ? (
-                <View style={styles.sourceRow}>
-                  <Text style={[styles.badge, { backgroundColor: c.accentTrack, color: c.text }]}>✓ Label · {SOURCE_NAMES[item.source.db]}</Text>
-                  <View style={styles.stepper}>
-                    <StepButton label="−" disabled={(item.servings ?? 1) <= 0.5} onPress={() => setItems(items.map((it, i) => (i === index ? withServings(it, (it.servings ?? 1) - 0.5) : it)))} />
-                    <Text style={[styles.small, { color: c.text2, minWidth: 74, textAlign: 'center' }]}>
-                      {formatDecimal(item.servings ?? 1)} serving{(item.servings ?? 1) === 1 ? '' : 's'}
-                    </Text>
-                    <StepButton label="+" onPress={() => setItems(items.map((it, i) => (i === index ? withServings(it, (it.servings ?? 1) + 0.5) : it)))} />
-                  </View>
-                </View>
-              ) : item.name.trim() ? (
-                <Text style={[styles.badge, { backgroundColor: c.fill, color: c.text2, alignSelf: 'flex-start' }]}>Estimate</Text>
-              ) : null}
-            </View>
-          ))}
+                  <XStack alignItems="center" justifyContent="space-between">
+                    <Theme name="green">
+                      <XStack backgroundColor="$color4" borderRadius="$10" paddingHorizontal="$2.5" paddingVertical="$1">
+                        <SizableText size="$1" fontWeight="700" color="$color11">
+                          ✓ Label · {SOURCE_NAMES[item.source.db]}
+                        </SizableText>
+                      </XStack>
+                    </Theme>
+                    <XStack alignItems="center" gap="$2">
+                      <Button
+                        circular
+                        size="$2.5"
+                        backgroundColor={field}
+                        icon={<Minus size={14} />}
+                        disabled={(item.servings ?? 1) <= 0.5}
+                        opacity={(item.servings ?? 1) <= 0.5 ? 0.35 : 1}
+                        accessibilityLabel="Fewer servings"
+                        onPress={() => {
+                          tap();
+                          setItems(items.map((it, i) => (i === index ? withServings(it, (it.servings ?? 1) - 0.5) : it)));
+                        }}
+                      />
+                      <SizableText size="$2" fontWeight="600" minWidth={74} textAlign="center">
+                        {formatDecimal(item.servings ?? 1)} serving{(item.servings ?? 1) === 1 ? '' : 's'}
+                      </SizableText>
+                      <Button
+                        circular
+                        size="$2.5"
+                        backgroundColor={field}
+                        icon={<Plus size={14} />}
+                        accessibilityLabel="More servings"
+                        onPress={() => {
+                          tap();
+                          setItems(items.map((it, i) => (i === index ? withServings(it, (it.servings ?? 1) + 0.5) : it)));
+                        }}
+                      />
+                    </XStack>
+                  </XStack>
+                ) : item.name.trim() ? (
+                  <XStack backgroundColor={field} borderRadius="$10" paddingHorizontal="$2.5" paddingVertical="$1" alignSelf="flex-start">
+                    <SizableText size="$1" fontWeight="700" color="$color10">
+                      Estimate
+                    </SizableText>
+                  </XStack>
+                ) : null}
+              </YStack>
+            ))}
+          </YStack>
           <LinkButton label="+ Add food" onPress={() => setItems([...items, blankItem()])} />
 
-          <View style={styles.totals}>
-            <Text style={[styles.totalsText, { color: c.text2 }]}>
-              Total <Text style={{ color: c.text, fontWeight: '700' }}>{formatNumber(total('calories'))} kcal</Text>
-            </Text>
-            <Text style={[styles.totalsText, { color: c.text2 }]}>
-              P {formatNumber(total('protein_g'))} · C {formatNumber(total('carbs_g'))} · F {formatNumber(total('fat_g'))}
-            </Text>
-          </View>
+          <Theme name="blue">
+            <XStack backgroundColor="$color3" borderRadius="$6" padding="$3.5" marginVertical="$4" alignItems="center" justifyContent="space-between">
+              <YStack>
+                <SizableText size="$2" fontWeight="600" color="$color11">
+                  TOTAL
+                </SizableText>
+                <SizableText size="$7" fontWeight="800" color="$color12">
+                  {formatNumber(total('calories'))} kcal
+                </SizableText>
+              </YStack>
+              <SizableText size="$3" fontWeight="600" color="$color11">
+                P {formatNumber(total('protein_g'))} · C {formatNumber(total('carbs_g'))} · F {formatNumber(total('fat_g'))}
+              </SizableText>
+            </XStack>
+          </Theme>
 
           <Section>
             <TextField label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" />
           </Section>
-          {error ? <Text style={[styles.error, { color: c.critical }]}>{error}</Text> : null}
+          {error ? (
+            <Theme name="red">
+              <Paragraph color="$color10" marginBottom="$3">
+                {error}
+              </Paragraph>
+            </Theme>
+          ) : null}
           {entry && <DestructiveButton label="Delete meal" title="Delete this meal?" message="It will be removed from your log." onConfirm={remove} />}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -248,32 +292,10 @@ export default function MealSheet() {
   );
 }
 
-function StepButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
-  const c = useColors();
-  return (
-    <Button
-      circular
-      size="$2.5"
-      disabled={disabled}
-      opacity={disabled ? 0.35 : 1}
-      backgroundColor={c.fill}
-      color={c.text}
-      fontSize={18}
-      pressStyle={{ scale: 0.92, backgroundColor: c.fill }}
-      onPress={() => {
-        tap();
-        onPress();
-      }}
-    >
-      {label}
-    </Button>
-  );
-}
-
 /** Search packaged foods, or scan a barcode; a pick becomes an item with its label numbers. No Claude involved. */
 function FoodFinder({ onAdd }: { onAdd: (match: FoodMatch) => void }) {
-  const c = useColors();
   const { handle } = useSession();
+  const field = useFieldColor();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodMatch[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -297,49 +319,43 @@ function FoodFinder({ onAdd }: { onAdd: (match: FoodMatch) => void }) {
   }, [query, handle]);
 
   return (
-    <View style={{ gap: 10 }}>
-      <View style={styles.finderRow}>
-        <XStack flex={1} alignItems="center" gap="$2" backgroundColor={c.fill} borderRadius="$4" paddingLeft="$3">
-          <SymbolView name="magnifyingglass" size={16} tintColor={c.text3} fallback={<Text style={{ color: c.text3 }}>⌕</Text>} />
-          <Input
-            flex={1}
-            size="$4"
-            unstyled
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search packaged foods"
-            placeholderTextColor={c.text3 as never}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-            autoCorrect={false}
-            color={c.text}
-          />
-          {searching && <ActivityIndicator size="small" color={c.text3} style={{ marginRight: 10 }} />}
+    <YStack gap="$2.5">
+      <XStack gap="$2">
+        <XStack flex={1} alignItems="center" gap="$2" backgroundColor={field} borderRadius="$4" paddingLeft="$3">
+          <Search size={16} color="$color10" />
+          <Input flex={1} unstyled size="$4" height={44} value={query} onChangeText={setQuery} placeholder="Search packaged foods" placeholderTextColor={'$color8' as never} returnKeyType="search" clearButtonMode="while-editing" autoCorrect={false} color="$color" />
+          {searching && <ActivityIndicator size="small" style={{ marginRight: 10 }} />}
         </XStack>
-        <Button
-          size="$4"
-          backgroundColor={c.accent}
-          pressStyle={{ opacity: 0.85, backgroundColor: c.accent }}
-          accessibilityLabel="Scan a barcode"
-          icon={<SymbolView name="barcode.viewfinder" size={20} tintColor={c.onAccent} fallback={<Text style={{ color: c.onAccent }}>▥</Text>} />}
-          color={c.onAccent}
-          fontWeight="600"
-          onPress={() => {
-            tap();
-            router.push('/scan');
-          }}
-        >
-          Scan
-        </Button>
-      </View>
-      {results && !results.length && !searching && <Text style={[styles.small, { color: c.text3 }]}>No products with label data. Add it by hand below.</Text>}
+        <Theme name="blue">
+          <Button
+            size="$4"
+            backgroundColor="$color9"
+            color="white"
+            fontWeight="700"
+            icon={<ScanBarcode size={18} color="white" />}
+            pressStyle={{ backgroundColor: '$color10', scale: 0.97 }}
+            accessibilityLabel="Scan a barcode"
+            onPress={() => {
+              tap();
+              router.push('/scan');
+            }}
+          >
+            Scan
+          </Button>
+        </Theme>
+      </XStack>
+      {results && !results.length && !searching && (
+        <Paragraph size="$2" color="$color10">
+          No products with label data. Add it by hand below.
+        </Paragraph>
+      )}
       {results?.map((match, i) => (
         <YStack
           key={`${match.source.db}:${match.source.id}`}
           paddingVertical="$2"
           gap="$0.5"
-          borderTopWidth={i > 0 ? StyleSheet.hairlineWidth : 0}
-          borderTopColor={c.separator}
+          borderTopWidth={i > 0 ? 0.5 : 0}
+          borderTopColor="$borderColor"
           pressStyle={{ opacity: 0.55 }}
           onPress={() => {
             tap();
@@ -348,43 +364,16 @@ function FoodFinder({ onAdd }: { onAdd: (match: FoodMatch) => void }) {
             setResults(null);
           }}
         >
-          <SizableText size="$4" fontWeight="600" color={c.text}>
+          <SizableText size="$4" fontWeight="700">
             {match.source.product}
           </SizableText>
-          <SizableText size="$2" color={c.text2}>
+          <SizableText size="$2" color="$color10">
             {match.serving} · {formatNumber(match.per_serving.calories)} kcal · P {formatNumber(match.per_serving.protein_g)} · C {formatNumber(match.per_serving.carbs_g)} · F{' '}
             {formatNumber(match.per_serving.fat_g)}
           </SizableText>
         </YStack>
       ))}
-    </View>
+    </YStack>
   );
 }
 
-const styles = StyleSheet.create({
-  recent: { gap: 8 },
-  recentChip: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, maxWidth: 220 },
-  recentName: { fontSize: 15, fontWeight: '600' },
-  small: { fontSize: 13 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderRadius: 999, paddingHorizontal: 13, paddingVertical: 7 },
-  chipText: { fontSize: 15 },
-  item: { borderRadius: 12, padding: 12, gap: 10, marginBottom: 10 },
-  itemHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  itemName: { fontSize: 16, fontWeight: '600' },
-  itemInput: { minHeight: 40, borderRadius: 9, paddingHorizontal: 10, fontSize: 16 },
-  macroRow: { flexDirection: 'row', gap: 6 },
-  sourceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  badge: { fontSize: 12, fontWeight: '600', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, overflow: 'hidden' },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  stepButton: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  totals: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 14, paddingHorizontal: 4 },
-  totalsText: { fontSize: 15 },
-  error: { fontSize: 15, marginBottom: 12 },
-  finderRow: { flexDirection: 'row', gap: 8 },
-  search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10, paddingHorizontal: 10, minHeight: 42 },
-  searchInput: { flex: 1, fontSize: 17, paddingVertical: 8 },
-  scan: { width: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  result: { paddingVertical: 9, gap: 2 },
-  resultName: { fontSize: 15, fontWeight: '600' },
-});

@@ -1,5 +1,5 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { router, Stack, useFocusEffect } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, RefreshControl, ScrollView, Text } from 'react-native';
@@ -23,6 +23,11 @@ export default function Today() {
   // undefined means "today", whatever date that is when the app is opened.
   const [date, setDate] = useState<string>();
   const [picking, setPicking] = useState(false);
+  // History links here with ?date=YYYY-MM-DD.
+  const { date: linked } = useLocalSearchParams<{ date?: string }>();
+  useEffect(() => {
+    if (linked) setDate(linked);
+  }, [linked]);
   const { data: day, error, loading, reload } = useLoad(() => api.day(date), [date]);
 
   // Coming back from an add/edit sheet (or another tab): show the latest. The first focus is the initial load.
