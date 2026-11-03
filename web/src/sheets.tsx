@@ -2,6 +2,7 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { api, type Collection, type Exercise, type FoodItem, type FoodMatch, type Meal, type WeighIn, type WeightUnit, type Workout } from './api.ts';
 import { formatDecimal, formatNumber } from './format.ts';
+import { itemFromMatch, withServings } from './meal-items.ts';
 import { DeleteButton, NumberField, Sheet, useApp } from './ui.tsx';
 
 interface SheetProps<T> {
@@ -72,30 +73,6 @@ const SOURCE_NAMES = { usda: 'USDA', off: 'Open Food Facts' };
 
 /** Loaded on first use: the barcode decoder is large. */
 const Scanner = lazy(() => import('./Scanner.tsx'));
-
-const itemFromMatch = (match: FoodMatch): FoodItem => ({
-  name: match.source.product,
-  brand: match.brand,
-  servings: 1,
-  quantity: match.serving,
-  ...match.per_serving,
-  source: match.source,
-});
-
-/** A label item eaten `servings` times: its numbers and amount scale from the current ones. */
-function withServings(item: FoodItem, servings: number): FoodItem {
-  const ratio = servings / (item.servings ?? 1);
-  const base = item.quantity?.replace(/^[\d.]+ × /, '');
-  return {
-    ...item,
-    servings,
-    quantity: base && (servings === 1 ? base : `${formatDecimal(servings)} × ${base}`),
-    calories: Math.round(item.calories * ratio),
-    protein_g: Math.round(item.protein_g * ratio * 10) / 10,
-    carbs_g: Math.round(item.carbs_g * ratio * 10) / 10,
-    fat_g: Math.round(item.fat_g * ratio * 10) / 10,
-  };
-}
 
 /** Search packaged foods or scan a barcode; a pick becomes an item with its label numbers. No Claude involved. */
 function FoodFinder({ onAdd }: { onAdd: (item: FoodItem) => void }) {

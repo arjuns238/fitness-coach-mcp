@@ -8,8 +8,8 @@ export function useTabStackOptions(): NativeStackNavigationOptions {
   const c = useColors();
   return {
     headerLargeTitle: true,
+    // iOS draws its own scroll-edge effect under a transparent header; adding a blur on top doubles it.
     headerTransparent: Platform.OS === 'ios',
-    headerBlurEffect: 'systemChromeMaterial',
     headerShadowVisible: false,
     headerLargeTitleShadowVisible: false,
     headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : c.background },
